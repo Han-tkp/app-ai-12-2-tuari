@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #0a84ff;
+  --color-mac-red: #ff4f6a;
+  --color-mac-orange: #ffb340;
+  --color-mac-green: #34d399;
+  --color-mac-teal: #00e5c8;
+}
+
+@layer base {
+  :root {
+    /* macOS LIGHT THEME - Professional Refinement */
+    --bg-window: #f6f6f7;
+    --bg-titlebar: rgba(255, 255, 255, 0.8);
+    --bg-sidebar: rgba(246, 246, 247, 0.8);
+    --bg-surface: #ffffff;
+    --bg-surface2: #efeff0;
+    --bg-surface3: #e5e5e7;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --bg-active: rgba(0, 122, 255, 0.1);
+    --bg-input: #ffffff;
+    --bg-viewport: #f0f0f2;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.15);
+    --text1: #1d1d1f;
+    --text2: #424245;
+    --text3: #6e6e73;
+    --text4: #86868b;
+    --accent-text: #0071e3;
+    --separator: rgba(0, 0, 0, 0.06);
+    --scrollbar: rgba(0, 0, 0, 0.15);
+    --blur: blur(30px);
+  }
+
+  .dark {
+    /* macOS DARK THEME - Exact from HTML */
+    --bg-window: #1c1c1e;
+    --bg-titlebar: rgba(28, 28, 30, 0.88);
+    --bg-sidebar: rgba(28, 28, 30, 0.85);
+    --bg-surface: #2c2c2e;
+    --bg-surface2: rgba(255, 255, 255, 0.06);
+    --bg-surface3: rgba(255, 255, 255, 0.10);
+    --bg-hover: rgba(255, 255, 255, 0.06);
+    --bg-active: rgba(10, 132, 255, 0.18);
+    --bg-input: rgba(255, 255, 255, 0.08);
+    --bg-viewport: #000000;
+    --border: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --text1: #ffffff;
+    --text2: rgba(235, 235, 245, 0.8);
+    --text3: rgba(235, 235, 245, 0.6);
+    --text4: rgba(235, 235, 245, 0.25);
+    --accent-text: #409cff;
+    --separator: rgba(255, 255, 255, 0.07);
+    --scrollbar: rgba(255, 255, 255, 0.15);
+    --blur: blur(30px);
+  }
+
+  .warm {
+    /* WARM THEME — parchment / amber */
+    --bg-window: #fff3e0;
+    --bg-titlebar: rgba(255, 243, 224, 0.9);
+    --bg-sidebar: rgba(255, 228, 196, 0.88);
+    --bg-surface: #ffffff;
+    --bg-surface2: #fff8f0;
+    --bg-surface3: #ffe0b2;
+    --bg-hover: rgba(230, 81, 0, 0.05);
+    --bg-active: rgba(230, 81, 0, 0.10);
+    --bg-input: #ffffff;
+    --bg-viewport: #fce4d6;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.14);
+    --text1: #3e2723;
+    --text2: #6d4c41;
+    --text3: #8d6e63;
+    --text4: #a1887f;
+    --accent-text: #e65100;
+    --separator: rgba(0, 0, 0, 0.06);
+    --scrollbar: rgba(0, 0, 0, 0.12);
+    --blur: blur(30px);
+  }
+
+  body {
+    background-color: var(--bg-window);
+    color: var(--text1);
+    @apply m-0 p-0 overflow-hidden;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s, color 0.3s;
+  }
+}
+
+@layer components {
+  .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--scrollbar); @apply rounded-full; }
+  
+  .mac-dialog-shadow { 
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border); 
+  }
+
+  .mac-select {
+    @apply w-full bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[var(--text1)] outline-none focus:border-[var(--accent)] transition-all cursor-pointer text-[13px] font-medium appearance-none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M.5 1 4.5 5.5 8.5 1' fill='none' stroke='%238899bb' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+
+  .sf-btn { @apply rounded-lg px-4 py-2 font-medium text-[12px] transition-all flex items-center justify-center gap-2 border border-[var(--border-strong)] bg-[var(--bg-surface2)] text-[var(--text2)] hover:text-[var(--text1)] hover:bg-[var(--bg-surface3)]; }
+  .sf-section-label { @apply text-[9.5px] font-bold text-[var(--text4)] uppercase tracking-[0.12em] px-1 mb-1.5 leading-none; }
+  .sf-card { @apply bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl overflow-hidden transition-colors shadow-sm; }
+
+  .zoom-input { @apply appearance-none w-[120px] h-[3px] bg-[var(--bg-surface3)] rounded-full outline-none; }
+  .zoom-input::-webkit-slider-thumb { @apply appearance-none w-3.5 h-3.5 rounded-full bg-white shadow-md border border-[var(--border)] cursor-pointer hover:scale-110 active:scale-95 transition-all; }
+
+  .vp-grid {
+    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.25;
+  }
+
+  .vp-grid-black {
+    background-color: #000000;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* สำหรับทำให้หน้าต่าง Tauri ลากได้ */
+  .titlebar-drag { @apply cursor-default select-none; }
+}
+
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.animate-pulse-dot { animation: pulse-dot 2s infinite; }
+
+input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }

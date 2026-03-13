@@ -1,0 +1,546 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+--bg0:#080C14;--bg1:#0D1424;--bg2:#121B30;--bg3:#192340;
+--teal:#00E5C8;--teal2:#00B8A0;--teal-dim:#00E5C820;--teal-glow:#00E5C840;
+--amber:#FFB340;--red:#FF4F6A;--green:#34D399;
+--text1:#E8F0FF;--text2:#8899BB;--text3:#4A5A7A;
+--border:#1E2E4A;--border2:#2A3D5E;
+--font-ui:'Syne',sans-serif;--font-data:'IBM Plex Mono',monospace;
+}
+body{background:var(--bg0);font-family:var(--font-ui);color:var(--text1);overflow-x:hidden;min-height:800px;}
+
+.shell{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;min-height:800px;background:var(--bg0);}
+
+/* TITLE BAR */
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:40px;background:var(--bg1);border-bottom:1px solid var(--border);user-select:none;}
+.titlebar-left{display:flex;align-items:center;gap:10px;}
+.app-icon{width:18px;height:18px;background:var(--teal);border-radius:4px;display:flex;align-items:center;justify-content:center;}
+.app-icon svg{width:11px;height:11px;fill:var(--bg0);}
+.app-name{font-size:13px;font-weight:600;color:var(--text1);letter-spacing:0.02em;}
+.app-project{font-size:13px;color:var(--text3);margin-left:2px;}
+.titlebar-menu{display:flex;gap:0;}
+.menu-item{font-size:12px;color:var(--text2);padding:4px 10px;border-radius:4px;cursor:pointer;transition:all .15s;}
+.menu-item:hover{background:var(--bg3);color:var(--text1);}
+.titlebar-controls{display:flex;gap:8px;}
+.ctrl{width:12px;height:12px;border-radius:50%;cursor:pointer;}
+.ctrl-min{background:#3A3A3A;}.ctrl-max{background:#3A3A3A;}.ctrl-close{background:#FF4F6A;}
+
+/* METRICS BAR */
+.metrics{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:0;background:var(--bg1);border-bottom:1px solid var(--border);height:56px;padding:0;}
+.slide-badge{display:flex;align-items:center;gap:0;padding:0 20px;border-right:1px solid var(--border);height:100%;}
+.badge-na{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:4px 12px;font-family:var(--font-data);font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;}
+.slide-meta{display:flex;flex-direction:column;gap:1px;padding-left:14px;}
+.slide-meta-label{font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;}
+.slide-meta-val{font-size:12px;color:var(--text2);}
+
+.metrics-grid{display:flex;align-items:center;justify-content:space-around;padding:0 16px;height:100%;}
+.metric{display:flex;flex-direction:column;align-items:center;gap:3px;padding:0 12px;}
+.metric-label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);}
+.metric-val{font-family:var(--font-data);font-size:18px;font-weight:500;color:var(--text1);}
+.metric-val.accent{color:var(--teal);}
+.metric-val.warn{color:var(--amber);}
+.metric-val.danger{color:var(--red);}
+.metric-sep{width:1px;height:28px;background:var(--border);}
+
+.perf-badge{display:flex;align-items:center;gap:6px;background:linear-gradient(90deg,#00E5C815,#00E5C808);border:1px solid var(--teal2);border-radius:6px;padding:6px 14px;margin-right:16px;}
+.perf-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.perf-text{font-size:11px;font-weight:600;color:var(--teal);letter-spacing:.08em;}
+
+/* MAIN LAYOUT */
+.main{display:grid;grid-template-columns:280px 1fr;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--border);}
+.tab{flex:1;padding:12px 0;text-align:center;font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--text3);cursor:pointer;transition:all .2s;position:relative;}
+.tab.active{color:var(--teal);}
+.tab.active::after{content:'';position:absolute;bottom:0;left:20%;right:20%;height:2px;background:var(--teal);border-radius:2px 2px 0 0;}
+.tab:hover:not(.active){color:var(--text2);}
+.tab-icon{font-size:14px;margin-right:5px;}
+
+.sidebar-body{padding:16px;flex:1;display:flex;flex-direction:column;gap:14px;overflow-y:auto;}
+
+.section-label{font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:var(--text3);margin-bottom:8px;}
+
+.lens-select{width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:9px 14px;font-family:var(--font-ui);font-size:13px;font-weight:500;color:var(--text1);appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234A5A7A'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+.lens-select:focus{outline:none;border-color:var(--teal2);}
+
+.btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.btn{border:none;border-radius:8px;padding:9px 4px;font-family:var(--font-ui);font-size:11px;font-weight:600;letter-spacing:.04em;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:4px;}
+.btn svg{width:12px;height:12px;flex-shrink:0;}
+.btn-start{background:#00E5C820;color:var(--teal);border:1px solid var(--teal2);}
+.btn-start:hover{background:var(--teal-glow);}
+.btn-switch{background:var(--bg3);color:var(--text2);border:1px solid var(--border2);}
+.btn-switch:hover{border-color:var(--border2);color:var(--text1);}
+.btn-stop{background:#FF4F6A15;color:var(--red);border:1px solid #FF4F6A40;}
+.btn-stop:hover{background:#FF4F6A25;}
+
+.btn-live{width:100%;border-radius:8px;padding:10px;font-family:var(--font-ui);font-size:12px;font-weight:600;letter-spacing:.06em;cursor:pointer;transition:all .2s;border:1px dashed var(--amber);background:#FFB34010;color:var(--amber);display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn-live:hover{background:#FFB34020;}
+.btn-live-icon{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse 1.5s infinite;}
+
+.btn-snap{width:100%;border-radius:8px;padding:10px;font-family:var(--font-ui);font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn-snap:hover{color:var(--text1);border-color:var(--border2);}
+
+.btn-manual{width:100%;border-radius:8px;padding:10px;font-family:var(--font-ui);font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn-manual:hover{color:var(--text1);}
+
+/* CAMERA AREA */
+.camera-area{background:var(--bg0);display:flex;flex-direction:column;position:relative;overflow:hidden;}
+.status-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--bg1);border-bottom:1px solid var(--border);}
+.status-left{display:flex;align-items:center;gap:8px;}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);}
+.status-dot.offline{background:#4A5A7A;}
+.status-text{font-size:12px;color:var(--text2);}
+.status-error{font-size:12px;color:#FF4F6A80;font-family:var(--font-data);}
+.cam-badge{font-family:var(--font-data);font-size:10px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:.06em;}
+
+.viewport{flex:1;display:flex;align-items:center;justify-content:center;position:relative;background:radial-gradient(ellipse at center, #0D1424 0%, #080C14 100%);}
+.viewport-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px, transparent 1px),linear-gradient(90deg, var(--border) 1px, transparent 1px);background-size:40px 40px;opacity:.3;}
+.viewport-empty{display:flex;flex-direction:column;align-items:center;gap:12px;z-index:1;}
+.crosshair{width:48px;height:48px;position:relative;opacity:.3;}
+.crosshair::before,.crosshair::after{content:'';position:absolute;background:var(--teal);}
+.crosshair::before{width:1px;height:100%;left:50%;transform:translateX(-50%);}
+.crosshair::after{height:1px;width:100%;top:50%;transform:translateY(-50%);}
+.no-signal{font-family:var(--font-data);font-size:11px;letter-spacing:.14em;color:var(--text3);}
+.corner{position:absolute;width:18px;height:18px;border-color:var(--teal2);border-style:solid;opacity:.5;}
+.corner-tl{top:20px;left:20px;border-width:2px 0 0 2px;}
+.corner-tr{top:20px;right:20px;border-width:2px 2px 0 0;}
+.corner-bl{bottom:20px;left:20px;border-width:0 0 2px 2px;}
+.corner-br{bottom:20px;right:20px;border-width:0 2px 2px 0;}
+
+/* ZOOM BAR */
+.zoom-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg1);border-top:1px solid var(--border);}
+.zoom-left{display:flex;align-items:center;gap:10px;}
+.zoom-label{font-size:11px;color:var(--text3);letter-spacing:.06em;}
+.zoom-slider{-webkit-appearance:none;width:120px;height:3px;background:var(--bg3);border-radius:2px;outline:none;}
+.zoom-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--teal);cursor:pointer;}
+.zoom-val{font-family:var(--font-data);font-size:11px;color:var(--text2);}
+.btn-reset{background:var(--bg2);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text2);cursor:pointer;font-family:var(--font-ui);}
+.sysmetrics{font-family:var(--font-data);font-size:10px;color:var(--text3);letter-spacing:.04em;}
+
+/* REPORT PANEL */
+.report-panel{display:none;flex-direction:column;gap:14px;}
+.filter-card{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:12px;}
+.filter-title{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--teal2);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.filter-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.filter-field{display:flex;flex-direction:column;gap:4px;}
+.filter-field label{font-size:10px;color:var(--text3);}
+.filter-field input{background:var(--bg0);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-family:var(--font-data);font-size:13px;color:var(--text1);width:100%;outline:none;}
+.filter-field input:focus{border-color:var(--teal2);}
+.filter-range{text-align:center;font-family:var(--font-data);font-size:11px;color:var(--teal);background:var(--teal-dim);border-radius:5px;padding:4px 8px;}
+
+.slides-card{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:12px;}
+.slide-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
+.slide-item:last-child{border-bottom:none;}
+.slide-name{font-size:13px;font-weight:500;color:var(--text1);}
+.status-pill{display:flex;align-items:center;gap:4px;background:var(--bg3);border-radius:20px;padding:3px 8px;}
+.status-pill-dot{width:5px;height:5px;border-radius:50%;background:var(--text3);}
+.status-pill-text{font-size:10px;color:var(--text3);letter-spacing:.04em;}
+
+.target-row{display:flex;align-items:center;justify-content:space-between;}
+.target-ctrl{display:flex;align-items:center;gap:0;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;}
+.target-val{font-family:var(--font-data);font-size:15px;font-weight:500;color:var(--text1);padding:6px 14px;min-width:60px;text-align:center;}
+.target-btn{background:var(--bg3);border:none;width:28px;height:32px;color:var(--text2);cursor:pointer;font-size:14px;transition:all .15s;}
+.target-btn:hover{background:var(--border2);color:var(--text1);}
+
+.btn-add{width:100%;border-radius:8px;padding:9px;font-family:var(--font-ui);font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;background:var(--teal-dim);color:var(--teal);border:1px solid var(--teal2);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn-add:hover{background:var(--teal-glow);}
+.btn-export{width:100%;border-radius:8px;padding:9px;font-family:var(--font-ui);font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;background:var(--teal);color:var(--bg0);border:none;transition:all .15s;}
+.btn-export:hover{opacity:.9;}
+
+.items-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text3);}
+.items-count{font-family:var(--font-data);font-size:12px;color:var(--amber);}
+
+.dir-display{background:var(--bg0);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:var(--font-data);font-size:10px;color:var(--teal2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* SETTINGS OVERLAY */
+.settings-overlay{display:none;position:fixed;inset:0;background:rgba(8,12,20,.85);z-index:100;align-items:center;justify-content:center;}
+.settings-dialog{background:var(--bg1);border:1px solid var(--border2);border-radius:14px;width:680px;max-height:560px;display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;}
+.settings-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+.settings-title{font-size:14px;font-weight:600;color:var(--text1);display:flex;align-items:center;gap:8px;}
+.settings-title-icon{width:20px;height:20px;border-radius:6px;background:var(--teal-dim);border:1px solid var(--teal2);display:flex;align-items:center;justify-content:center;}
+.settings-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;transition:.15s;}
+.settings-close:hover{color:var(--text1);}
+.settings-body{display:grid;grid-template-columns:180px 1fr;overflow:hidden;}
+.settings-nav{border-right:1px solid var(--border);padding:12px 0;}
+.nav-item{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;transition:all .15s;position:relative;}
+.nav-item:hover:not(.nav-active){color:var(--text2);background:var(--bg2);}
+.nav-item.nav-active{color:var(--text1);background:var(--bg2);}
+.nav-item.nav-active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--teal);border-radius:0 2px 2px 0;}
+.nav-item-icon{font-size:14px;}
+.settings-content{padding:20px;overflow-y:auto;}
+.settings-section-title{font-size:14px;font-weight:600;color:var(--teal);margin-bottom:16px;letter-spacing:-.01em;}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-group{display:flex;flex-direction:column;gap:6px;}
+.field-group label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);}
+.field-group select{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-family:var(--font-ui);font-size:13px;color:var(--text1);appearance:none;cursor:pointer;width:100%;}
+.field-group select:focus{outline:none;border-color:var(--teal2);}
+.hw-table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+.hw-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);padding:6px 10px;border-bottom:1px solid var(--border);}
+.hw-table td{padding:8px 10px;font-size:12px;border-bottom:1px solid var(--border);}
+.hw-table td:first-child{color:var(--text1);font-family:var(--font-data);}
+.hw-table td:nth-child(2){color:var(--text3);}
+.perf-tag{border-radius:4px;padding:2px 8px;font-size:10px;font-weight:600;letter-spacing:.06em;}
+.perf-tag.good{background:#34D39920;color:var(--green);}
+.perf-tag.mid{background:#FFB34015;color:var(--amber);}
+.settings-footer{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--border);}
+.settings-footer-left{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);}
+.warn-icon{color:var(--amber);font-size:12px;}
+.settings-footer-btns{display:flex;gap:8px;}
+.btn-sm{padding:7px 16px;border-radius:7px;font-size:12px;font-weight:600;letter-spacing:.03em;cursor:pointer;transition:all .15s;font-family:var(--font-ui);}
+.btn-apply{background:var(--bg3);color:var(--text2);border:1px solid var(--border2);}
+.btn-apply:hover{color:var(--text1);}
+.btn-close-s{background:var(--bg2);color:var(--text2);border:1px solid var(--border2);}
+.btn-save{background:var(--teal);color:var(--bg0);border:none;}
+.btn-save:hover{opacity:.9;}
+.restore-link{font-size:11px;color:var(--red);cursor:pointer;background:none;border:none;font-family:var(--font-ui);}
+
+.active-panel{display:flex;}
+</style>
+
+<div class="shell">
+  <div class="titlebar">
+    <div class="titlebar-left">
+      <div class="app-icon"><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="4"/><circle cx="6" cy="6" r="1.5" fill="rgba(0,0,0,.6)"/></svg></div>
+      <span class="app-name">DropDetect</span>
+      <span class="app-project">— Untitled Project</span>
+      <div class="titlebar-menu" style="margin-left:16px;">
+        <span class="menu-item">File</span>
+        <span class="menu-item" onclick="showSettings()">View</span>
+      </div>
+    </div>
+    <div class="titlebar-controls">
+      <div class="ctrl ctrl-min"></div><div class="ctrl ctrl-max"></div><div class="ctrl ctrl-close"></div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="slide-badge">
+      <span class="badge-na">N/A</span>
+      <div class="slide-meta">
+        <span class="slide-meta-label">Current Slide</span>
+        <span class="slide-meta-val">—</span>
+      </div>
+      <div class="slide-meta" style="margin-left:16px;padding-left:16px;border-left:1px solid var(--border);">
+        <span class="slide-meta-label">Slide Status</span>
+        <span class="slide-meta-val">—</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex:1;padding:0 8px;">
+      <div class="metrics-grid" style="flex:1;">
+        <div class="metric">
+          <span class="metric-label">Target Size</span>
+          <span class="metric-val" style="color:var(--amber);">200</span>
+        </div>
+        <div class="metric-sep"></div>
+        <div class="metric">
+          <span class="metric-label">VMD</span>
+          <span class="metric-val accent">0.00</span>
+        </div>
+        <div class="metric-sep"></div>
+        <div class="metric">
+          <span class="metric-label">In-Frame</span>
+          <span class="metric-val">0</span>
+        </div>
+        <div class="metric-sep"></div>
+        <div class="metric">
+          <span class="metric-label">Accumulated</span>
+          <span class="metric-val">0</span>
+        </div>
+        <div class="metric-sep"></div>
+        <div class="metric">
+          <span class="metric-label">Span</span>
+          <span class="metric-val">0.00</span>
+        </div>
+        <div class="metric-sep"></div>
+        <div class="metric">
+          <span class="metric-label">Out-of-Bounds</span>
+          <span class="metric-val danger">0</span>
+        </div>
+      </div>
+      <div class="perf-badge">
+        <div class="perf-dot"></div>
+        <span class="perf-text">HIGH · GPU</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sidebar">
+      <div class="sidebar-tabs">
+        <div class="tab active" id="tab-analyze" onclick="switchTab('analyze')">
+          <span class="tab-icon">◎</span>Analyze
+        </div>
+        <div class="tab" id="tab-report" onclick="switchTab('report')">
+          <span class="tab-icon">⊞</span>Report
+        </div>
+      </div>
+
+      <div class="sidebar-body" id="panel-analyze">
+        <div>
+          <div class="section-label">Objective Lens</div>
+          <select class="lens-select">
+            <option>10x</option>
+            <option>4x</option>
+          </select>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-start">
+            <svg viewBox="0 0 12 12" fill="currentColor"><polygon points="2,1 10,6 2,11"/></svg>Start
+          </button>
+          <button class="btn btn-switch">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="7" y="7" width="4" height="4" rx="1"/></svg>Switch
+          </button>
+          <button class="btn btn-stop">
+            <svg viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1"/></svg>Stop
+          </button>
+        </div>
+
+        <button class="btn-live">
+          <div class="btn-live-icon"></div>
+          START LIVE AI · F5
+        </button>
+
+        <button class="btn-snap">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="12" height="9" rx="1.5"/><circle cx="7" cy="7.5" r="2.5"/><path d="M5 3l.8-1.5h2.4L9 3"/></svg>
+          Take Snapshot · Space
+        </button>
+
+        <button class="btn-manual" onclick="toggleManual()">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 10l1.5-1.5L10 2l2 2-6.5 6.5L2 12z"/></svg>
+          Manual Edit
+        </button>
+
+        <div id="manual-panel" style="display:none;">
+          <div class="section-label" style="margin-bottom:8px;">Drawing Tool</div>
+          <div class="btn-row">
+            <button class="btn btn-switch" id="tool-line" onclick="setTool('line')" style="background:var(--teal-dim);color:var(--teal);border-color:var(--teal2);">Line</button>
+            <button class="btn btn-switch" id="tool-ellipse" onclick="setTool('ellipse')">Ellipse</button>
+            <button class="btn btn-switch" id="tool-rect" onclick="setTool('rect')">Rect</button>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text3);line-height:1.5;">Click on image to measure droplets</div>
+        </div>
+      </div>
+
+      <div class="sidebar-body report-panel" id="panel-report" style="display:none;flex-direction:column;gap:14px;">
+        <div class="filter-card">
+          <div class="filter-title">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 2h10M3 6h6M5 10h2"/></svg>
+            Filter Size μm
+          </div>
+          <div class="filter-inputs">
+            <div class="filter-field">
+              <label>Min</label>
+              <input type="number" value="5.0">
+            </div>
+            <div class="filter-field">
+              <label>Max</label>
+              <input type="number" value="30.0">
+            </div>
+          </div>
+          <div class="filter-range">5.0 – 30.0 μm</div>
+        </div>
+
+        <div class="slides-card">
+          <div class="filter-title" style="margin-bottom:10px;">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="10" height="10" rx="1.5"/><path d="M4 4h4M4 8h2"/></svg>
+            Slide Workflow
+          </div>
+          <div class="slide-item">
+            <span class="slide-name">Slide 1</span>
+            <div class="status-pill"><div class="status-pill-dot"></div><span class="status-pill-text">Pending</span></div>
+          </div>
+          <div class="slide-item">
+            <span class="slide-name">Slide 2</span>
+            <div class="status-pill"><div class="status-pill-dot"></div><span class="status-pill-text">Pending</span></div>
+          </div>
+          <div class="slide-item">
+            <span class="slide-name">Slide 3</span>
+            <div class="status-pill"><div class="status-pill-dot"></div><span class="status-pill-text">Pending</span></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label" style="margin-bottom:8px;">Target Size</div>
+          <div class="target-row">
+            <div class="target-ctrl">
+              <button class="target-btn">▲</button>
+              <span class="target-val">200</span>
+              <button class="target-btn">▼</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-add">+ Add Data to Excel Report</button>
+        <div class="items-row">
+          <span>Items in report</span>
+          <span class="items-count">0</span>
+        </div>
+        <div class="dir-display">C:\Users\h4n\Desktop\excelดสอบาi\</div>
+        <button class="btn-export">Export to Excel</button>
+      </div>
+    </div>
+
+    <div class="camera-area">
+      <div class="status-bar">
+        <div class="status-left">
+          <div class="status-dot offline"></div>
+          <span class="status-text">Offline</span>
+          <span style="color:var(--text3);font-size:12px;">·</span>
+          <span class="status-error">Recovery failed: End of Central Directory record could not be found.</span>
+        </div>
+        <div class="cam-badge">CAM 0</div>
+      </div>
+      <div class="viewport">
+        <div class="viewport-grid"></div>
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+        <div class="viewport-empty">
+          <div class="crosshair"></div>
+          <span class="no-signal">NO SIGNAL</span>
+        </div>
+      </div>
+      <div class="zoom-bar">
+        <div class="zoom-left">
+          <span class="zoom-label">Zoom</span>
+          <input type="range" class="zoom-slider" min="50" max="400" value="100" id="zoom-slider" oninput="document.getElementById('zoom-val').textContent=this.value+'%'">
+          <span class="zoom-val" id="zoom-val">100%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="btn-reset" onclick="document.getElementById('zoom-slider').value=100;document.getElementById('zoom-val').textContent='100%'">Reset View</button>
+          <span class="sysmetrics">RAM 290 MB | 0 FPS | CPU</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="settings-overlay" id="settings-overlay" onclick="hideSettings(event)">
+  <div class="settings-dialog" onclick="event.stopPropagation()">
+    <div class="settings-header">
+      <div class="settings-title">
+        <div class="settings-title-icon">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--teal)" stroke-width="1.5"><circle cx="6" cy="6" r="2"/><path d="M6 1v1M6 10v1M1 6h1M10 6h1M2.5 2.5l.7.7M8.8 8.8l.7.7M2.5 9.5l.7-.7M8.8 3.2l.7-.7"/></svg>
+        </div>
+        DropDetect System Configuration
+      </div>
+      <button class="settings-close" onclick="hideSettings()">✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-nav">
+        <div class="nav-item nav-active" onclick="switchNav(this,'ai')">
+          <span class="nav-item-icon">🧠</span>AI & Capture
+        </div>
+        <div class="nav-item" onclick="switchNav(this,'hw')">
+          <span class="nav-item-icon">🖥</span>Hardware & Camera
+        </div>
+        <div class="nav-item" onclick="switchNav(this,'manual')">
+          <span class="nav-item-icon">✏️</span>Manual Edit
+        </div>
+        <div class="nav-item" onclick="switchNav(this,'appearance')">
+          <span class="nav-item-icon">🎨</span>Appearance & Output
+        </div>
+      </div>
+      <div class="settings-content" id="settings-pane">
+        <div class="settings-section-title">Model Management</div>
+        <div class="settings-grid" style="margin-bottom:14px;">
+          <div class="field-group">
+            <label>Lens 4x Model</label>
+            <select><option>yolov8n_4x.onnx</option></select>
+          </div>
+          <div class="field-group">
+            <label>Lens 10x Model</label>
+            <select><option>yolov8n_10x.onnx</option></select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <button class="btn-sm btn-save" style="flex:1;">↑ Import ONNX File</button>
+          <button class="btn-sm btn-apply">Reload</button>
+          <button class="btn-sm btn-apply">Open Folder</button>
+        </div>
+        <div class="settings-section-title">Capture Settings</div>
+        <div class="settings-grid">
+          <div class="field-group">
+            <label>Snapshot Hotkey</label>
+            <select><option>Space</option></select>
+          </div>
+          <div class="field-group">
+            <label>AI Confidence Threshold</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+              <input type="range" min="0" max="1" step="0.05" value="0.25" style="flex:1;" oninput="document.getElementById('conf-val').textContent=parseFloat(this.value).toFixed(2)">
+              <span id="conf-val" style="font-family:var(--font-data);font-size:13px;color:var(--text1);min-width:30px;">0.25</span>
+            </div>
+          </div>
+          <div class="field-group">
+            <label>Live AI Toggle Hotkey</label>
+            <select><option>F5</option></select>
+          </div>
+          <div class="field-group">
+            <label>Snapshot Hold Duration (s)</label>
+            <input type="number" value="3.0" style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;color:var(--text1);font-family:var(--font-data);font-size:13px;width:100%;outline:none;">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-footer">
+      <button class="restore-link">Restore Defaults</button>
+      <div class="settings-footer-btns">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--amber);margin-right:8px;">
+          <span>⚠</span> You have unsaved changes
+        </div>
+        <button class="btn-sm btn-apply">Apply</button>
+        <button class="btn-sm btn-close-s" onclick="hideSettings()">Close</button>
+        <button class="btn-sm btn-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(t){
+  document.getElementById('panel-analyze').style.display=t==='analyze'?'flex':'none';
+  document.getElementById('panel-report').style.display=t==='report'?'flex':'none';
+  if(t==='analyze'){document.getElementById('panel-analyze').style.flexDirection='column';}
+  document.getElementById('tab-analyze').className='tab'+(t==='analyze'?' active':'');
+  document.getElementById('tab-report').className='tab'+(t==='report'?' active':'');
+}
+function toggleManual(){
+  var p=document.getElementById('manual-panel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+function setTool(t){
+  ['line','ellipse','rect'].forEach(function(n){
+    var b=document.getElementById('tool-'+n);
+    b.style.background=n===t?'var(--teal-dim)':'var(--bg3)';
+    b.style.color=n===t?'var(--teal)':'var(--text2)';
+    b.style.borderColor=n===t?'var(--teal2)':'var(--border2)';
+  });
+}
+function showSettings(){
+  document.getElementById('settings-overlay').style.display='flex';
+}
+function hideSettings(e){
+  if(!e||e.target===document.getElementById('settings-overlay')){
+    document.getElementById('settings-overlay').style.display='none';
+  }
+}
+var navContents={
+  ai:'<div class="settings-section-title">Model Management</div><div class="settings-grid" style="margin-bottom:14px;"><div class="field-group"><label>Lens 4x Model</label><select><option>yolov8n_4x.onnx</option></select></div><div class="field-group"><label>Lens 10x Model</label><select><option>yolov8n_10x.onnx</option></select></div></div><div style="display:flex;gap:8px;margin-bottom:20px;"><button class="btn-sm btn-save" style="flex:1;">↑ Import ONNX File</button><button class="btn-sm btn-apply">Reload</button><button class="btn-sm btn-apply">Open Folder</button></div><div class="settings-section-title">Capture Settings</div><div class="settings-grid"><div class="field-group"><label>Snapshot Hotkey</label><select><option>Space</option></select></div><div class="field-group"><label>AI Confidence Threshold</label><div style="display:flex;align-items:center;gap:8px;margin-top:6px;"><input type="range" min="0" max="1" step="0.05" value="0.25" style="flex:1;" oninput="document.getElementById(\'conf-val\').textContent=parseFloat(this.value).toFixed(2)"><span id="conf-val" style="font-family:var(--font-data);font-size:13px;color:var(--text1);min-width:30px;">0.25</span></div></div><div class="field-group"><label>Live AI Toggle Hotkey</label><select><option>F5</option></select></div><div class="field-group"><label>Snapshot Hold Duration (s)</label><input type="number" value="3.0" style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;color:var(--text1);font-family:var(--font-data);font-size:13px;width:100%;outline:none;"></div></div>',
+  hw:'<div class="settings-section-title">System Hardware & Performance</div><table class="hw-table"><thead><tr><th>Device Name</th><th>Type</th><th>Performance</th></tr></thead><tbody><tr><td>Intel Core i7-8550U @ 1.80GHz</td><td style="color:var(--text2)">CPU</td><td><span class="perf-tag good">Good</span></td></tr><tr><td>Intel UHD Graphics 620</td><td style="color:var(--text2)">GPU</td><td><span class="perf-tag mid">Mid</span></td></tr><tr><td>AMD Radeon R7 M460</td><td style="color:var(--text2)">GPU</td><td><span class="perf-tag mid">Mid</span></td></tr></tbody></table><div style="margin-bottom:16px;"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" checked style="accent-color:var(--teal)"><span style="font-size:13px;color:var(--text1);">Enable Auto-Save Background Worker</span></div></div><div class="field-group" style="margin-bottom:14px;"><label>Execution Provider</label><select><option value=""></option><option>DirectML</option><option>CPU</option></select></div><div class="settings-section-title" style="margin-top:14px;">Hardware Performance Profile</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><input type="checkbox" checked style="accent-color:var(--teal)"><span style="font-size:13px;color:var(--text1);">Auto-detect & Adaptive Optimization</span></div><div class="field-group"><label>Manual Profile</label><select><option>High</option><option>Medium</option><option>Low</option></select></div>',
+  manual:'<div class="settings-section-title">Drawing Appearance</div><div class="settings-grid" style="margin-bottom:16px;"><div class="field-group"><label>Line / Border Thickness</label><div style="display:flex;align-items:center;gap:8px;margin-top:6px;"><input type="range" min="1" max="8" value="2" style="flex:1;" oninput="this.nextElementSibling.textContent=this.value+\' px\'"><span style="font-family:var(--font-data);font-size:13px;color:var(--text1);">2 px</span></div></div><div class="field-group"><label>Fill Opacity</label><div style="display:flex;align-items:center;gap:8px;margin-top:6px;"><input type="range" min="0" max="1" step="0.05" value="0.2" style="flex:1;" oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)"><span style="font-family:var(--font-data);font-size:13px;color:var(--text1);">0.2</span></div></div></div><div class="field-group" style="margin-bottom:16px;"><label>Color (Hex)</label><div style="display:flex;align-items:center;gap:8px;margin-top:6px;"><div style="width:28px;height:28px;border-radius:6px;background:#00FF00;border:1px solid var(--border2);flex-shrink:0;"></div><input type="text" value="#00FF00" style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;color:var(--text1);font-family:var(--font-data);font-size:13px;width:100%;outline:none;"></div></div><div class="settings-section-title">Visibility & Auto-Hide</div><div style="display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" checked style="accent-color:var(--teal)"><span style="font-size:13px;color:var(--text1);">Show manual drawings on screen</span></div><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" checked style="accent-color:var(--teal)"><span style="font-size:13px;color:var(--text1);">Show size labels (μm) near drawings</span></div></div>',
+  appearance:'<div class="settings-section-title">UI & Themes</div><div class="settings-grid" style="margin-bottom:16px;"><div class="field-group"><label>Theme</label><select><option>Dark</option><option>Light</option></select></div><div class="field-group"><label>Language</label><select><option>English</option><option>Thai</option></select></div><div class="field-group"><label>UI Font</label><select><option>Google Sans</option><option>IBM Plex Sans</option><option>Syne</option></select></div><div class="field-group"><label>Interface Scale</label><div style="display:flex;align-items:center;gap:8px;margin-top:6px;"><input type="range" min="0.8" max="1.5" step="0.1" value="1.2" style="flex:1;" oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)+\'x\'"><span style="font-family:var(--font-data);font-size:13px;color:var(--text1);">1.2x</span></div></div></div><div class="settings-section-title">File Export & Output</div><div class="field-group"><label>Output Directory</label><div style="display:flex;align-items:center;gap:8px;margin-top:6px;"><div class="dir-display" style="flex:1;">C:\\Users\\h4n\\Desktop\\excelดสอบาi\\</div><button class="btn-sm btn-apply">Browse</button></div></div>'
+};
+function switchNav(el,key){
+  document.querySelectorAll('.nav-item').forEach(function(n){n.className='nav-item';});
+  el.className='nav-item nav-active';
+  document.getElementById('settings-pane').innerHTML=navContents[key];
+}
+</script>
