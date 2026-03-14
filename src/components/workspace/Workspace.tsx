@@ -139,7 +139,7 @@ const Workspace: React.FC = () => {
           {isSlideMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setSlideMenuOpen(false)} />
-              <div className="absolute top-full left-0 mt-1 w-[190px] bg-[var(--bg-sidebar)] border border-[var(--border)] rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+              <div className="absolute top-full left-0 mt-1 w-[190px] bg-[var(--bg-sidebar)] border border-[var(--border-strong)] rounded-[5px] z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-left" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.55)' }}>
                 {slides.length === 0 ? (
                   <div className="py-4 text-center text-[10px] text-[var(--text4)] italic">No slides defined.</div>
                 ) : slides.map((s, i) => (
@@ -235,7 +235,7 @@ const Workspace: React.FC = () => {
           )}
           <AnnotationLayer width={CANVAS_WIDTH} height={CANVAS_HEIGHT} scale={1} />
           {(!isCameraRunning || !imageSrc) && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] pointer-events-none">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none">
               <svg viewBox="0 0 40 40" className="w-10 h-10" fill="none" stroke="var(--text4)" strokeWidth="1.5">
                 <rect x="4" y="4" width="32" height="26" rx="3" />
                 <path d="M14 36h12M20 30v6" />
@@ -266,7 +266,7 @@ const Workspace: React.FC = () => {
           <button onClick={() => setZoom(100)} className="reset-btn ml-2">Reset View</button>
         </div>
         <div className="flex items-center gap-2.5">
-          <span className="text-[10.5px] font-medium uppercase" style={{ color: 'var(--text4)' }}>
+          <span className="text-[10px]" style={{ color: 'var(--text4)' }}>
             RAM {ramUsage} · {isCameraRunning ? '30' : '0'} FPS
           </span>
           <ProfileBadge profile={hardwareProfile} inferenceSkip={inferenceSkip} />
@@ -302,7 +302,7 @@ const NavTool: React.FC<{
 
 const PROFILE_COLORS: Record<string, string> = {
   low: 'var(--mac-orange)',
-  mid: 'var(--mac-yellow, #f5a623)',
+  mid: 'var(--mac-yellow)',
   high: 'var(--mac-green)',
 };
 

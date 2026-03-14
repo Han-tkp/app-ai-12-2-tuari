@@ -7,8 +7,11 @@ import supervision as sv
 import psutil
 import json
 import os
-import pandas as pd
 import zipfile
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, Border, Side
+from openpyxl.chart import BarChart, Reference
+from openpyxl.utils import get_column_letter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import logging
@@ -34,6 +37,108 @@ PROFILE_TRACK_BUFFER = {"low": 90, "mid": 60, "high": 30}
 
 # Letterbox constant: 640×480 camera → 640×640 model input (80px top+bottom padding)
 PAD_TOP = 80
+
+# ── Language Settings ────────────────────────────────────────────────────────
+class LanguageConfig:
+    """Configuration for Excel export language."""
+    def __init__(self, lang='th'):
+        self.lang = lang
+        
+        # Thai labels
+        self.TH = {
+            'title': 'รายงานการวิเคราะห์ละอองฝอยสารเคมี',
+            'target': 'ขนาดเป้าหมาย',
+            'total_slides': 'จำนวนสไลด์',
+            'generated': 'สร้างเมื่อ',
+            'slide_summary': 'สรุปผลสไลด์',
+            'slide': 'สไลด์',
+            'dv01': 'Dv0.1 (µm)',
+            'dv05': 'Dv0.5 / VMD (µm)',
+            'dv09': 'Dv0.9 (µm)',
+            'span': 'SPAN',
+            'count': 'จำนวน (n)',
+            'who_status': 'สถานะ WHO',
+            'pass': 'ผ่าน',
+            'fail': 'ไม่ผ่าน',
+            'in_range_pct': 'ในช่วง (%)',
+            'overall_stats': 'สถิติรวม',
+            'total_droplets': 'ละอองทั้งหมด',
+            'avg_vmd': 'VMD เฉลี่ย (µm)',
+            'avg_span': 'SPAN เฉลี่ย',
+            'who_compliant': 'สไลด์ที่ผ่าน WHO',
+            'vmd_chart_title': 'เปรียบเทียบ VMD แต่ละสไลด์',
+            'vmd_chart_y': 'VMD (µm)',
+            'vmd_chart_x': 'สไลด์',
+            # Per-slide sheet
+            'droplet_data': 'ข้อมูลละออง (เรียงตามขนาด)',
+            'who_status_short': 'สถานะ WHO',
+            'in_range': 'ในช่วง',
+            'hash': '#',
+            'diameter': 'ขนาด (µm)',
+            'who_range': 'ช่วง WHO',
+            'volume': 'ปริมาตร (µm³)',
+            'spread_factor': 'Spread Factor',
+            'cumulative_pct': 'สะสม (%)',
+            'yes': 'ใช่',
+            'no': 'ไม่',
+            'size_distribution': 'การกระจายขนาดละออง',
+            'size_range': 'ช่วงขนาด (µm)',
+            'count_label': 'จำนวน',
+            'ai_count': 'AI',
+            'manual_count': 'Manual',
+        }
+        
+        # English labels
+        self.EN = {
+            'title': 'WHO Chemical Spray Droplet Analysis Report',
+            'target': 'Target Size',
+            'total_slides': 'Total Slides',
+            'generated': 'Generated',
+            'slide_summary': 'SLIDE SUMMARY',
+            'slide': 'Slide',
+            'dv01': 'Dv0.1 (µm)',
+            'dv05': 'Dv0.5 / VMD (µm)',
+            'dv09': 'Dv0.9 (µm)',
+            'span': 'SPAN',
+            'count': 'Count (n)',
+            'who_status': 'WHO Status',
+            'pass': 'Pass',
+            'fail': 'Fail',
+            'in_range_pct': 'In Range %',
+            'overall_stats': 'OVERALL STATISTICS',
+            'total_droplets': 'Total Droplets',
+            'avg_vmd': 'Avg VMD (µm)',
+            'avg_span': 'Avg SPAN',
+            'who_compliant': 'WHO Compliant Slides',
+            'vmd_chart_title': 'VMD Comparison by Slide',
+            'vmd_chart_y': 'VMD (µm)',
+            'vmd_chart_x': 'Slide',
+            # Per-slide sheet
+            'droplet_data': 'Droplet Data (Sorted by Size)',
+            'who_status_short': 'WHO Status',
+            'in_range': 'In Range',
+            'hash': '#',
+            'diameter': 'Diameter (µm)',
+            'who_range': 'WHO Range',
+            'volume': 'Volume (µm³)',
+            'spread_factor': 'Spread Factor',
+            'cumulative_pct': 'Cumulative %',
+            'yes': 'Yes',
+            'no': 'No',
+            'size_distribution': 'Droplet Size Distribution',
+            'size_range': 'Size Range (µm)',
+            'count_label': 'Count',
+            'ai_count': 'AI',
+            'manual_count': 'Manual',
+        }
+    
+    def get(self, key):
+        """Get label in current language."""
+        labels = self.TH if self.lang == 'th' else self.EN
+        return labels.get(key, key)
+
+# Default language config
+DEFAULT_LANG = LanguageConfig('th')
 
 
 def open_camera(idx: int) -> cv2.VideoCapture:
@@ -69,6 +174,7 @@ class SaveProjectRequest(BaseModel):
     target_size: int
     save_directory: str
     slides: list[SlideData]
+    language: str = "th"  # 'th' or 'en'
 
 class ManualDataRequest(BaseModel):
     data: list[float] = []
@@ -80,7 +186,7 @@ class DropletSystem:
         self.calibration_value = 2.7926330340561596e-07
         self.conf_threshold = 0.25
         self.profile = detect_profile()
-        self.tracker = sv.ByteTrack(track_buffer=PROFILE_TRACK_BUFFER[self.profile])
+        self.tracker = sv.ByteTrack(lost_track_buffer=PROFILE_TRACK_BUFFER[self.profile])
         self.counted_ids = set()
         self.droplet_data = {}
         self.pending_snapshot = False
@@ -97,7 +203,7 @@ class DropletSystem:
         if profile in PROFILE_SKIP:
             self.profile = profile
             self.inference_skip = PROFILE_SKIP[profile]
-            self.tracker = sv.ByteTrack(track_buffer=PROFILE_TRACK_BUFFER[profile])
+            self.tracker = sv.ByteTrack(lost_track_buffer=PROFILE_TRACK_BUFFER[profile])
             logger.info("Profile overridden to %s (skip=1/%d, track_buffer=%d)", profile, self.inference_skip, PROFILE_TRACK_BUFFER[profile])
 
     def load_resources(self, lens: str):
@@ -116,7 +222,7 @@ class DropletSystem:
         self.reset_stats()
 
     def reset_stats(self):
-        self.tracker = sv.ByteTrack(track_buffer=PROFILE_TRACK_BUFFER[self.profile])
+        self.tracker = sv.ByteTrack(lost_track_buffer=PROFILE_TRACK_BUFFER[self.profile])
         self.counted_ids = set()
         self.droplet_data = {}
 
@@ -143,34 +249,435 @@ class DropletSystem:
 
 system = DropletSystem()
 
+def _compute_slide_stats(droplets: list[float]) -> dict:
+    """Compute Dv10, Dv50, Dv90, SPAN for a list of diameters."""
+    if not droplets:
+        return {"dv10": None, "dv50": None, "dv90": None, "span": None, "count": 0}
+    diams = sorted(droplets)
+    vols = [(np.pi / 6) * (d ** 3) for d in diams]
+    total_vol = sum(vols)
+    cum = np.cumsum(vols) / total_vol
+    dv10 = float(diams[int(np.searchsorted(cum, 0.1))])
+    dv50 = float(diams[int(np.searchsorted(cum, 0.5))])
+    dv90 = float(diams[int(np.searchsorted(cum, 0.9))])
+    span = float((dv90 - dv10) / dv50) if dv50 > 0 else 0.0
+    return {"dv10": dv10, "dv50": dv50, "dv90": dv90, "span": span, "count": len(diams)}
+
+
+def _build_excel(req: "SaveProjectRequest", excel_path: str, lang='th'):
+    """
+    Build Excel report with Thai language and side-by-side layout:
+    - Left: Dashboard (Summary stats + chart)
+    - Right: Slide data tables
+    """
+    # Initialize language config
+    L = LanguageConfig(lang)
+    
+    # ── Workbook ──────────────────────────────────────────────────────────────
+    wb = Workbook()
+
+    # Compute stats for all slides
+    stats_list = [_compute_slide_stats(s.droplets) for s in req.slides]
+
+    # ── Sheet 1: Summary Dashboard ───────────────────────────────────────────
+    ws = wb.active
+    ws.title = "Summary"
+
+    # Title (top-left)
+    ws.merge_cells("A1:F1")
+    ws["A1"] = f"DropDetect AI - {req.project_name}"
+    ws["A1"].font = Font(bold=True, size=16)
+    ws.row_dimensions[1].height = 30
+
+    # Subtitle
+    ws.merge_cells("A2:F2")
+    ws["A2"] = L.get('title')
+    ws["A2"].font = Font(italic=True, size=12)
+    ws.row_dimensions[2].height = 20
+
+    # Info
+    ws.merge_cells("A3:F3")
+    ws["A3"] = f"{L.get('target')}: {req.target_size} µm  |  {L.get('total_slides')}: {len(req.slides)}  |  {L.get('generated')}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    ws.row_dimensions[3].height = 18
+
+    # SLIDE SUMMARY section (left side - Dashboard)
+    ws.merge_cells("A5:F5")
+    ws["A5"] = L.get('slide_summary')
+    ws["A5"].font = Font(bold=True, size=12)
+    ws.row_dimensions[5].height = 24
+
+    # Header (left side)
+    header_row = 6
+    headers = [L.get('slide'), L.get('dv01'), L.get('dv05'), L.get('dv09'), L.get('span'), L.get('count'), L.get('who_status'), L.get('in_range_pct')]
+    for col_idx, h in enumerate(headers, 1):
+        c = ws.cell(row=header_row, column=col_idx, value=h)
+        c.font = Font(bold=True, size=10)
+        c.alignment = Alignment(horizontal="center")
+        c.border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
+    ws.row_dimensions[header_row].height = 22
+
+    # Data rows (left side)
+    for row_idx, (slide, st) in enumerate(zip(req.slides, stats_list), header_row + 1):
+        who_pass = st["dv50"] is not None and 10 <= st["dv50"] <= 30
+        who_text = L.get('pass') if who_pass else L.get('fail')
+        in_range = len([d for d in slide.droplets if 10 <= d <= 30])
+        in_range_pct = (in_range / len(slide.droplets) * 100) if slide.droplets else 0
+
+        ws.cell(row=row_idx, column=1, value=slide.name).font = Font(bold=True, size=10)
+        ws.cell(row=row_idx, column=2, value=round(st['dv10'], 3) if st['dv10'] else "N/A")
+        ws.cell(row=row_idx, column=3, value=round(st['dv50'], 3) if st['dv50'] else "N/A")
+        ws.cell(row=row_idx, column=4, value=round(st['dv90'], 3) if st['dv90'] else "N/A")
+        ws.cell(row=row_idx, column=5, value=round(st['span'], 4) if st['span'] else "N/A")
+        ws.cell(row=row_idx, column=6, value=st['count'])
+        
+        who_cell = ws.cell(row=row_idx, column=7, value=who_text)
+        who_cell.font = Font(bold=True, color="008000" if who_pass else "FF0000")
+        
+        pct_cell = ws.cell(row=row_idx, column=8, value=round(in_range_pct, 1))
+        pct_cell.number_format = "0.0%"
+        
+        for col in range(1, 9):
+            cell = ws.cell(row=row_idx, column=col)
+            cell.border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
+        ws.row_dimensions[row_idx].height = 20
+
+    # Column widths (left side)
+    ws.column_dimensions["A"].width = 12
+    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 14
+    ws.column_dimensions["E"].width = 12
+    ws.column_dimensions["F"].width = 10
+    ws.column_dimensions["G"].width = 14
+    ws.column_dimensions["H"].width = 12
+
+    # OVERALL STATISTICS (left side, below table)
+    overall_row = header_row + len(req.slides) + 2
+    total_droplets = sum(st['count'] for st in stats_list)
+    avg_vmd = sum(st['dv50'] for st in stats_list if st['dv50']) / len([st for st in stats_list if st['dv50']]) if any(st['dv50'] for st in stats_list) else 0
+    avg_span = sum(st['span'] for st in stats_list if st['span']) / len([st for st in stats_list if st['span']]) if any(st['span'] for st in stats_list) else 0
+    who_pass_count = sum(1 for st in stats_list if st['dv50'] and 10 <= st['dv50'] <= 30)
+
+    ws.merge_cells(f"A{overall_row}:F{overall_row}")
+    ws[f"A{overall_row}"] = L.get('overall_stats')
+    ws[f"A{overall_row}"].font = Font(bold=True, size=12)
+    ws.row_dimensions[overall_row].height = 24
+
+    overall_data = [
+        (L.get('total_droplets'), total_droplets),
+        (L.get('avg_vmd'), round(avg_vmd, 3)),
+        (L.get('avg_span'), round(avg_span, 4)),
+        (L.get('who_compliant'), f"{who_pass_count}/{len(req.slides)}"),
+    ]
+
+    for col_idx, (label, value) in enumerate(overall_data, 1):
+        row = overall_row + 1
+        ws.cell(row=row, column=col_idx*2-1, value=label).font = Font(bold=True, size=10)
+        ws.cell(row=row, column=col_idx*2, value=value).font = Font(size=10)
+
+    # Add VMD Distribution Chart (left side, below stats)
+    chart_row_start = overall_row + 3
+    ws.merge_cells(f"A{chart_row_start}:F{chart_row_start}")
+    ws[f"A{chart_row_start}"] = L.get('vmd_chart_title')
+    ws[f"A{chart_row_start}"].font = Font(bold=True, size=12)
+    ws.row_dimensions[chart_row_start].height = 24
+
+    chart = BarChart()
+    chart.type = "col"
+    chart.style = 10
+    chart.title = L.get('vmd_chart_title')
+    chart.y_axis.title = L.get('vmd_chart_y')
+    chart.x_axis.title = L.get('vmd_chart_x')
+
+    data_ref = Reference(ws, min_col=3, min_row=header_row+1, max_row=header_row+len(req.slides), max_col=3)
+    cat_ref = Reference(ws, min_col=1, min_row=header_row+1, max_row=header_row+len(req.slides))
+
+    chart.add_data(data_ref, titles_from_data=False)
+    chart.set_categories(cat_ref)
+    chart.shape = 4
+    chart.width = 14
+    chart.height = 10
+
+    ws.add_chart(chart, f"A{chart_row_start+1}")
+
+    # ── Per-slide sheets (right side layout) ──────────────────────────────────
+    for slide_idx, slide in enumerate(req.slides):
+        if not slide.droplets:
+            continue
+
+        diams = sorted(slide.droplets)  # Sort from small to large
+        st = stats_list[slide_idx]
+        sheet_name = slide.name[:31]
+        ws2 = wb.create_sheet(title=sheet_name)
+
+        # Title
+        ws2.merge_cells("A1:F1")
+        ws2["A1"] = f"{slide.name} - {L.get('droplet_data')}"
+        ws2["A1"].font = Font(bold=True, size=14)
+        ws2.row_dimensions[1].height = 28
+
+        # Stats summary (left side)
+        stat_labels = [
+            (L.get('dv01'), round(st['dv10'], 3) if st['dv10'] else "N/A"),
+            (L.get('dv05'), round(st['dv50'], 3) if st['dv50'] else "N/A"),
+            (L.get('dv09'), round(st['dv90'], 3) if st['dv90'] else "N/A"),
+            (L.get('span'), round(st['span'], 4) if st['span'] else "N/A"),
+            (L.get('count'), st["count"]),
+        ]
+        for r, (lbl, val) in enumerate(stat_labels, 2):
+            ws2.cell(row=r, column=1, value=lbl).font = Font(bold=True, size=10)
+            ws2.cell(row=r, column=2, value=val).font = Font(size=10)
+            ws2.row_dimensions[r].height = 18
+
+        # WHO status
+        who_pass = st['dv50'] and 10 <= st['dv50'] <= 30
+        in_range = len([d for d in diams if 10 <= d <= 30])
+        in_range_pct = (in_range / len(diams) * 100) if diams else 0
+        
+        ws2.cell(row=2, column=3, value=L.get('who_status_short')).font = Font(bold=True, size=10)
+        ws2.cell(row=2, column=4, value=L.get('pass') if who_pass else L.get('fail')).font = Font(bold=True, color="008000" if who_pass else "FF0000")
+        
+        ws2.cell(row=3, column=3, value=L.get('in_range')).font = Font(bold=True, size=10)
+        ws2.cell(row=3, column=4, value=round(in_range_pct, 1)).number_format = "0.0%"
+
+        # Raw data header
+        hdr_row = 5
+        headers = [L.get('hash'), L.get('diameter'), L.get('who_range'), L.get('volume'), L.get('spread_factor'), L.get('cumulative_pct')]
+        for ci, txt in enumerate(headers, 1):
+            c = ws2.cell(row=hdr_row, column=ci, value=txt)
+            c.font = Font(bold=True, size=10)
+            c.alignment = Alignment(horizontal="center")
+            c.border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
+        ws2.row_dimensions[hdr_row].height = 20
+
+        # Data rows (sorted small to large)
+        cum_count = 0
+        for i, d in enumerate(diams, 1):
+            cum_count += 1
+            vol = (np.pi / 6) * (d ** 3)
+            sf = 0.86 if d > 20 else 0.80 if d >= 15 else 0.75 if d >= 10 else 0.70
+            in_range_flag = 10.0 <= d <= 30.0
+            cum_pct = (cum_count / len(diams) * 100)
+            row_num = hdr_row + i
+            
+            ws2.cell(row=row_num, column=1, value=i)
+            ws2.cell(row=row_num, column=2, value=round(d, 3)).number_format = "0.000"
+            ws2.cell(row=row_num, column=3, value=L.get('yes') if in_range_flag else L.get('no')).font = Font(color="008000" if in_range_flag else "FF0000")
+            ws2.cell(row=row_num, column=4, value=round(vol, 1)).number_format = "0.0"
+            ws2.cell(row=row_num, column=5, value=sf).number_format = "0.00"
+            ws2.cell(row=row_num, column=6, value=round(cum_pct, 1)).number_format = "0.0%"
+            
+            for ci in range(1, 7):
+                cell = ws2.cell(row=row_num, column=ci)
+                cell.border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
+            ws2.row_dimensions[row_num].height = 16
+
+        # Column widths
+        ws2.column_dimensions["A"].width = 6
+        ws2.column_dimensions["B"].width = 14
+        ws2.column_dimensions["C"].width = 12
+        ws2.column_dimensions["D"].width = 14
+        ws2.column_dimensions["E"].width = 14
+        ws2.column_dimensions["F"].width = 12
+
+        # Add distribution chart
+        bins = {"<10": 0, "10-15": 0, "15-20": 0, "20-25": 0, "25-30": 0, ">30": 0}
+        for d in diams:
+            if d < 10: bins["<10"] += 1
+            elif d < 15: bins["10-15"] += 1
+            elif d < 20: bins["15-20"] += 1
+            elif d < 25: bins["20-25"] += 1
+            elif d < 30: bins["25-30"] += 1
+            else: bins[">30"] += 1
+
+        start_col = 8
+        start_row = hdr_row + len(diams) + 2
+        ws2.cell(row=start_row, column=start_col, value=L.get('size_range')).font = Font(bold=True)
+        ws2.cell(row=start_row, column=start_col+1, value=L.get('count_label')).font = Font(bold=True)
+
+        for i, (label, count) in enumerate(zip(list(bins.keys()), list(bins.values())), start_row+1):
+            ws2.cell(row=i, column=start_col, value=label)
+            ws2.cell(row=i, column=start_col+1, value=count)
+
+        chart2 = BarChart()
+        chart2.type = "col"
+        chart2.style = 10
+        chart2.title = L.get('size_distribution')
+        chart2.y_axis.title = L.get('count_label')
+        chart2.x_axis.title = L.get('size_range')
+
+        data_ref2 = Reference(ws2, min_col=start_col+1, min_row=start_row, max_row=start_row+len(bins), max_col=start_col+1)
+        cat_ref2 = Reference(ws2, min_col=start_col, min_row=start_row+1, max_row=start_row+len(bins))
+
+        chart2.add_data(data_ref2, titles_from_data=False)
+        chart2.set_categories(cat_ref2)
+        chart2.shape = 4
+        chart2.width = 12
+        chart2.height = 8
+
+        ws2.add_chart(chart2, f"A{start_row+1}")
+
+    # Save
+    os.makedirs(os.path.dirname(excel_path) if os.path.dirname(excel_path) else ".", exist_ok=True)
+    wb.save(excel_path)
+
+
+def _add_summary_chart(wb, ws, slides, stats_list, header_row, num_slides):
+    """Add distribution chart to Summary sheet."""
+
+    # Create chart data range
+    chart_row_start = header_row + num_slides + 4
+    chart_row_end = header_row + num_slides + 4 + len(slides) - 1
+    
+    # Add chart title row
+    ws.merge_cells(f"A{chart_row_start}:H{chart_row_start}")
+    ws[f"A{chart_row_start}"] = "VMD Distribution by Slide"
+    ws[f"A{chart_row_start}"].font = Font(bold=True, size=12)
+    ws.row_dimensions[chart_row_start].height = 24
+    
+    # Create chart
+    chart = BarChart()
+    chart.type = "col"
+    chart.style = 10
+    chart.title = "VMD Comparison (µm)"
+    chart.y_axis.title = "VMD (µm)"
+    chart.x_axis.title = "Slide"
+    
+    # Data range (VMD values)
+    data_ref = Reference(ws, min_col=3, min_row=header_row+1, max_row=header_row+num_slides, max_col=3)
+    cat_ref = Reference(ws, min_col=1, min_row=header_row+1, max_row=header_row+num_slides)
+    
+    chart.add_data(data_ref, titles_from_data=False)
+    chart.set_categories(cat_ref)
+    chart.shape = 4
+    chart.width = 12
+    chart.height = 8
+    
+    # Place chart
+    ws.add_chart(chart, f"A{chart_row_start+1}")
+
+
+def _add_slide_chart(wb, ws, diams, hdr_row, num_rows):
+    """Add distribution histogram to slide sheet."""
+
+    # Calculate distribution bins
+    bins = {"<10": 0, "10-15": 0, "15-20": 0, "20-25": 0, "25-30": 0, ">30": 0}
+    for d in diams:
+        if d < 10:
+            bins["<10"] += 1
+        elif d < 15:
+            bins["10-15"] += 1
+        elif d < 20:
+            bins["15-20"] += 1
+        elif d < 25:
+            bins["20-25"] += 1
+        elif d < 30:
+            bins["25-30"] += 1
+        else:
+            bins[">30"] += 1
+    
+    # Add bin data to sheet (hidden columns)
+    start_col = 8  # Column H
+    start_row = hdr_row + num_rows + 2
+    
+    ws.cell(row=start_row, column=start_col, value="Size Range (µm)")
+    ws.cell(row=start_row, column=start_col, value="Size Range (µm)").font = Font(bold=True)
+    ws.cell(row=start_row, column=start_col+1, value="Count")
+    ws.cell(row=start_row, column=start_col+1, value="Count").font = Font(bold=True)
+    
+    bin_labels = list(bins.keys())
+    bin_values = list(bins.values())
+    
+    for i, (label, count) in enumerate(zip(bin_labels, bin_values), start_row+1):
+        ws.cell(row=i, column=start_col, value=label)
+        ws.cell(row=i, column=start_col+1, value=count)
+    
+    # Create chart
+    chart = BarChart()
+    chart.type = "col"
+    chart.style = 10
+    chart.title = "Droplet Size Distribution"
+    chart.y_axis.title = "Count"
+    chart.x_axis.title = "Size Range (µm)"
+    
+    # Data range
+    data_ref = Reference(ws, min_col=start_col+1, min_row=start_row, max_row=start_row+len(bins), max_col=start_col+1)
+    cat_ref = Reference(ws, min_col=start_col, min_row=start_row+1, max_row=start_row+len(bins))
+    
+    chart.add_data(data_ref, titles_from_data=False)
+    chart.set_categories(cat_ref)
+    chart.shape = 4
+    chart.width = 12
+    chart.height = 8
+    
+    # Place chart
+    ws.add_chart(chart, f"A{start_row+1}")
+
+
+@app.post("/api/cleanup-autosave")
+async def cleanup_autosave(project_name: str):
+    """Clean up auto-save files for a specific project after successful manual save."""
+    import shutil
+    from pathlib import Path
+    
+    try:
+        docs = Path.home() / "Documents" / "DropDetect_Projects"
+        autosave_dir = docs / ".autosave"
+        
+        if autosave_dir.exists():
+            # Delete autosave files older than 7 days
+            now = datetime.now()
+            for f in autosave_dir.glob(f"{project_name}*"):
+                try:
+                    # Delete files older than 7 days
+                    mtime = datetime.fromtimestamp(f.stat().st_mtime)
+                    age = now - mtime
+                    if age.days > 7:
+                        f.unlink()
+                        logger.info(f"Cleaned up old autosave: {f.name}")
+                except Exception as e:
+                    logger.error(f"Failed to cleanup {f.name}: {e}")
+        
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/save-project")
 async def save_project(req: SaveProjectRequest):
+    import shutil
+    from pathlib import Path
+    
     project_base = os.path.join(req.save_directory, req.project_name)
-    excel_path = f"{project_base}_Report.xlsx"
-    drop_path = f"{project_base}.drop"
-    all_droplets = []
-    summary_data = []
-    for slide in req.slides:
-        if slide.droplets:
-            diams = sorted(slide.droplets)
-            vols = [(np.pi/6)*(d**3) for d in diams]
-            total_vol = sum(vols)
-            cum_vol = np.cumsum(vols)/total_vol
-            dv10 = diams[np.searchsorted(cum_vol, 0.1)]
-            dv50 = diams[np.searchsorted(cum_vol, 0.5)]
-            dv90 = diams[np.searchsorted(cum_vol, 0.9)]
-            span = (dv90-dv10)/dv50 if dv50 > 0 else 0
-            summary_data.append({"Slide Name": slide.name, "VMD (µm)": round(dv50, 2), "SPAN": round(span, 2), "Droplets": len(diams)})
-            for d in diams:
-                all_droplets.append({"Slide": slide.name, "Size (µm)": d})
+    excel_path   = f"{project_base}_Report.xlsx"
+    drop_path    = f"{project_base}.drop"
 
     os.makedirs(req.save_directory, exist_ok=True)
-    with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-        pd.DataFrame(summary_data).to_excel(writer, sheet_name="Summary", index=False)
-        pd.DataFrame(all_droplets).to_excel(writer, sheet_name="Raw Data", index=False)
-    with zipfile.ZipFile(drop_path, 'w') as zipf:
-        zipf.writestr("project.json", req.model_dump_json(indent=4))
-        zipf.write(excel_path, arcname=os.path.basename(excel_path))
+    
+    try:
+        # Build Excel with language setting (default Thai)
+        lang = req.language if hasattr(req, 'language') else 'th'
+        _build_excel(req, excel_path, lang=lang)
+    except PermissionError as e:
+        logger.error(f"Excel file is locked: {e}")
+        raise HTTPException(status_code=409, detail="Excel file is currently in use. Please close it and try again.")
+    except Exception as e:
+        logger.error(f"Excel build failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to build Excel: {str(e)}")
+
+    try:
+        # Create .drop file (ZIP) with file share mode
+        with zipfile.ZipFile(drop_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            zipf.writestr("project.json", req.model_dump_json(indent=4))
+            # Add Excel with error handling for file locks
+            try:
+                zipf.write(excel_path, arcname=os.path.basename(excel_path))
+            except PermissionError:
+                logger.warning("Could not add Excel to ZIP (file locked), continuing with JSON only")
+    except Exception as e:
+        logger.error(f"Failed to create .drop file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create project file: {str(e)}")
+
     return {"status": "success", "excel_file": excel_path, "drop_file": drop_path}
 
 @app.get("/api/load-project")
@@ -260,6 +767,44 @@ async def websocket_endpoint(websocket: WebSocket):
                     droplet_id = int(msg.get("id", 0))
                     system.droplet_data.pop(droplet_id, None)
                     system.counted_ids.discard(droplet_id)
+                elif action == "export_excel":
+                    # Quick export: save Excel report to Documents/DropDetect_Projects
+                    from pathlib import Path
+                    import os
+                    docs = Path.home() / "Documents" / "DropDetect_Projects"
+                    docs.mkdir(parents=True, exist_ok=True)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    excel_path = docs / f"DropDetect_QuickExport_{timestamp}.xlsx"
+                    
+                    # Create a simple slide from current session data
+                    slide_data = SlideData(
+                        id="quick_export",
+                        name=f"Session {timestamp}",
+                        droplets=[float(v) for v in system.droplet_data.values()]
+                    )
+                    
+                    # Build minimal project for export
+                    class QuickExportRequest(BaseModel):
+                        project_name: str
+                        target_size: int
+                        save_directory: str
+                        slides: list[SlideData]
+                    
+                    req = QuickExportRequest(
+                        project_name=f"QuickExport_{timestamp}",
+                        target_size=224,
+                        save_directory=str(docs),
+                        slides=[slide_data]
+                    )
+                    
+                    # Reuse _build_excel function
+                    _build_excel(req, str(excel_path))
+                    
+                    # Notify frontend
+                    await websocket.send_json({
+                        "action": "export_result",
+                        "path": str(excel_path)
+                    })
         except WebSocketDisconnect:
             pass  # Client disconnected cleanly from command handler
         except Exception as e:

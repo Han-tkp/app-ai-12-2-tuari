@@ -154,7 +154,7 @@ const SettingsWindow: React.FC = () => {
           top: `${settingsPosition.y}px`,
           position: 'absolute'
         }}
-        className="bg-[var(--bg-window)] w-[640px] h-[460px] rounded-[12px] flex flex-col overflow-hidden mac-dialog-shadow border border-[var(--border)] transition-colors pointer-events-auto select-none"
+        className="bg-[var(--bg-window)] w-[640px] h-[460px] rounded-[6px] flex flex-col overflow-hidden mac-dialog-shadow border border-[var(--border-strong)] transition-colors pointer-events-auto select-none"
       >
         
         <div className="flex-1 flex min-h-0">

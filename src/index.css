@@ -1,67 +1,93 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #0a84ff;
-  --color-mac-red: #ff4f6a;
-  --color-mac-orange: #ffb340;
-  --color-mac-green: #34d399;
-  --color-mac-teal: #00e5c8;
+  --color-accent: #3b82f6;
+  --color-mac-red: #ef4444;
+  --color-mac-orange: #f97316;
+  --color-mac-green: #22c55e;
+  --color-mac-teal: #14b8a6;
+  --color-mac-yellow: #eab308;
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
 }
 
 @layer base {
   :root {
-    /* macOS LIGHT THEME - Professional Refinement */
-    --bg-window: #f6f6f7;
-    --bg-titlebar: rgba(255, 255, 255, 0.8);
-    --bg-sidebar: rgba(246, 246, 247, 0.8);
+    --accent: #3b82f6;
+    --mac-red: #ef4444;
+    --mac-orange: #f97316;
+    --mac-green: #22c55e;
+    --mac-teal: #14b8a6;
+    --mac-yellow: #eab308;
+
+    --bg-window: #f5f6f8;
+    --bg-titlebar: #eef0f4;
+    --bg-sidebar: #eef0f4;
     --bg-surface: #ffffff;
-    --bg-surface2: #efeff0;
-    --bg-surface3: #e5e5e7;
+    --bg-surface2: #f5f6f8;
+    --bg-surface3: #eaecf0;
     --bg-hover: rgba(0, 0, 0, 0.04);
-    --bg-active: rgba(0, 122, 255, 0.1);
+    --bg-active: rgba(59, 130, 246, 0.10);
     --bg-input: #ffffff;
-    --bg-viewport: #f0f0f2;
-    --border: rgba(0, 0, 0, 0.08);
+    --bg-viewport: #dde1e9;
+    --border: rgba(0, 0, 0, 0.09);
     --border-strong: rgba(0, 0, 0, 0.15);
-    --text1: #1d1d1f;
-    --text2: #424245;
-    --text3: #6e6e73;
-    --text4: #86868b;
-    --accent-text: #0071e3;
+    --text1: #111827;
+    --text2: #374151;
+    --text3: #6b7280;
+    --text4: #9ca3af;
+    --accent-text: #2563eb;
     --separator: rgba(0, 0, 0, 0.06);
     --scrollbar: rgba(0, 0, 0, 0.15);
-    --blur: blur(30px);
+    --blur: blur(0px);
   }
 
   .dark {
-    /* macOS DARK THEME - Exact from HTML */
-    --bg-window: #1c1c1e;
-    --bg-titlebar: rgba(28, 28, 30, 0.88);
-    --bg-sidebar: rgba(28, 28, 30, 0.85);
-    --bg-surface: #2c2c2e;
-    --bg-surface2: rgba(255, 255, 255, 0.06);
-    --bg-surface3: rgba(255, 255, 255, 0.10);
-    --bg-hover: rgba(255, 255, 255, 0.06);
-    --bg-active: rgba(10, 132, 255, 0.18);
-    --bg-input: rgba(255, 255, 255, 0.08);
-    --bg-viewport: #000000;
-    --border: rgba(255, 255, 255, 0.10);
-    --border-strong: rgba(255, 255, 255, 0.18);
-    --text1: #ffffff;
-    --text2: rgba(235, 235, 245, 0.8);
-    --text3: rgba(235, 235, 245, 0.6);
-    --text4: rgba(235, 235, 245, 0.25);
-    --accent-text: #409cff;
-    --separator: rgba(255, 255, 255, 0.07);
-    --scrollbar: rgba(255, 255, 255, 0.15);
-    --blur: blur(30px);
+    --accent: #3b82f6;
+    --mac-red: #ef4444;
+    --mac-orange: #f97316;
+    --mac-green: #22c55e;
+    --mac-teal: #14b8a6;
+    --mac-yellow: #eab308;
+
+    --bg-window: #18191d;
+    --bg-titlebar: #111215;
+    --bg-sidebar: #111215;
+    --bg-surface: #1e2026;
+    --bg-surface2: #22252c;
+    --bg-surface3: #2a2d36;
+    --bg-hover: rgba(255, 255, 255, 0.04);
+    --bg-active: rgba(59, 130, 246, 0.12);
+    --bg-input: #13151a;
+    --bg-viewport: #0c0e12;
+    --border: #2a2d35;
+    --border-strong: #363a44;
+    --text1: #f1f3f5;
+    --text2: #9ca3af;
+    --text3: #6b7280;
+    --text4: #4b5563;
+    --accent-text: #60a5fa;
+    --separator: #1e2128;
+    --scrollbar: #363a44;
+    --blur: blur(0px);
   }
 
   .warm {
-    /* WARM THEME — parchment / amber */
+    --accent: #e65100;
+    --mac-red: #ef4444;
+    --mac-orange: #f97316;
+    --mac-green: #22c55e;
+    --mac-teal: #14b8a6;
+    --mac-yellow: #eab308;
+
     --bg-window: #fff3e0;
-    --bg-titlebar: rgba(255, 243, 224, 0.9);
-    --bg-sidebar: rgba(255, 228, 196, 0.88);
+    --bg-titlebar: #fff0d8;
+    --bg-sidebar: #fff0d8;
     --bg-surface: #ffffff;
     --bg-surface2: #fff8f0;
     --bg-surface3: #ffe0b2;
@@ -78,7 +104,7 @@
     --accent-text: #e65100;
     --separator: rgba(0, 0, 0, 0.06);
     --scrollbar: rgba(0, 0, 0, 0.12);
-    --blur: blur(30px);
+    --blur: blur(0px);
   }
 
   body {
@@ -93,43 +119,111 @@
 
 @layer components {
   .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--scrollbar); @apply rounded-full; }
-  
-  .mac-dialog-shadow { 
-    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border); 
+  .custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--scrollbar); border-radius: 2px; }
+
+  .mac-dialog-shadow {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border-strong);
   }
 
   .mac-select {
-    @apply w-full bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[var(--text1)] outline-none focus:border-[var(--accent)] transition-all cursor-pointer text-[13px] font-medium appearance-none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M.5 1 4.5 5.5 8.5 1' fill='none' stroke='%238899bb' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    @apply w-full bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-md px-3 py-2 text-[var(--text1)] outline-none transition-colors cursor-pointer text-[12px] appearance-none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M.5 1 4.5 5.5 8.5 1' fill='none' stroke='%236b7280' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
   }
+  .mac-select:focus { border-color: var(--accent); outline: none; }
 
-  .sf-btn { @apply rounded-lg px-4 py-2 font-medium text-[12px] transition-all flex items-center justify-center gap-2 border border-[var(--border-strong)] bg-[var(--bg-surface2)] text-[var(--text2)] hover:text-[var(--text1)] hover:bg-[var(--bg-surface3)]; }
-  .sf-section-label { @apply text-[9.5px] font-bold text-[var(--text4)] uppercase tracking-[0.12em] px-1 mb-1.5 leading-none; }
-  .sf-card { @apply bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl overflow-hidden transition-colors shadow-sm; }
+  .sf-btn {
+    @apply rounded-md px-4 py-2 font-medium text-[12px] transition-colors flex items-center justify-center gap-2;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-surface2);
+    color: var(--text2);
+  }
+  .sf-btn:hover { color: var(--text1); background: var(--bg-surface3); }
 
-  .zoom-input { @apply appearance-none w-[120px] h-[3px] bg-[var(--bg-surface3)] rounded-full outline-none; }
-  .zoom-input::-webkit-slider-thumb { @apply appearance-none w-3.5 h-3.5 rounded-full bg-white shadow-md border border-[var(--border)] cursor-pointer hover:scale-110 active:scale-95 transition-all; }
+  .sf-section-label {
+    @apply text-[10px] font-semibold uppercase px-0 mb-2 leading-none;
+    color: var(--text3);
+    letter-spacing: 0.07em;
+  }
+
+  .sf-card { @apply bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg overflow-hidden transition-colors; }
+
+  .zoom-input { @apply appearance-none h-[3px] bg-[var(--bg-surface3)] rounded-full outline-none w-[120px]; }
+  .zoom-input::-webkit-slider-thumb {
+    @apply appearance-none w-3.5 h-3.5 rounded-full cursor-pointer transition-transform;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg-window);
+  }
+  .zoom-input::-webkit-slider-thumb:hover { transform: scale(1.15); }
 
   .vp-grid {
-    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
     background-size: 40px 40px;
     opacity: 0.25;
   }
 
   .vp-grid-black {
-    background-color: #000000;
-    background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-color: #0c0e12;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
     background-size: 40px 40px;
   }
 
-  /* สำหรับทำให้หน้าต่าง Tauri ลากได้ */
+  .settings-section-title {
+    @apply text-[10px] font-semibold uppercase leading-none mb-2 px-0;
+    color: var(--text3);
+    letter-spacing: 0.07em;
+  }
+
   .titlebar-drag { @apply cursor-default select-none; }
+
+  /* Primary button */
+  .btn-primary {
+    @apply w-full h-10 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-colors;
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
+
+  /* Danger/stop button */
+  .btn-danger {
+    @apply w-full h-10 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-colors border;
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--mac-red);
+  }
+  .btn-danger:hover { background: rgba(239, 68, 68, 0.15); }
+
+  /* Secondary button */
+  .btn-secondary {
+    @apply w-full h-9 rounded-lg flex items-center justify-center gap-2 font-medium text-[12px] transition-colors border;
+    border-color: var(--border-strong);
+    background: var(--bg-surface2);
+    color: var(--text2);
+  }
+  .btn-secondary:hover { background: var(--bg-surface3); color: var(--text1); }
+  .btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Success button */
+  .btn-success {
+    @apply w-full h-10 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-colors border;
+    border-color: rgba(34, 197, 94, 0.35);
+    background: rgba(34, 197, 94, 0.10);
+    color: var(--mac-green);
+  }
+  .btn-success:hover { background: rgba(34, 197, 94, 0.18); }
 }
 
-@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.font-instrument {
+  font-family: 'Consolas', 'Cascadia Code', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .animate-pulse-dot { animation: pulse-dot 2s infinite; }
 
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }

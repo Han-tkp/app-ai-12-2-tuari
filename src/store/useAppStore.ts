@@ -3,10 +3,22 @@ import { v4 as uuidv4 } from 'uuid';
 import { API_BASE } from '../config';
 import { getSafeWorkspaceDir } from '../utils/fsUtils';
 
-// Restore persisted preferences and apply classes before first render
-const _storedTheme = (localStorage.getItem('dd-theme') as 'dark' | 'light' | 'warm') || 'dark';
-const _storedShell = (localStorage.getItem('dd-shell') as 'macos' | 'windows') || 'macos';
+// ── Persistence Keys ─────────────────────────────────────────────────────────
+const LS_KEYS = {
+  THEME: 'dd-theme',
+  SHELL: 'dd-shell',
+  PROJECT: 'dd-current-project',
+  AUTO_SAVE: 'dd-autosave-data',
+};
+
+// ── Restore persisted preferences ────────────────────────────────────────────
+const _storedTheme = (localStorage.getItem(LS_KEYS.THEME) as 'dark' | 'light' | 'warm') || 'dark';
+const _storedShell = (localStorage.getItem(LS_KEYS.SHELL) as 'macos' | 'windows') || 'macos';
 document.documentElement.classList.add(_storedTheme, `shell-${_storedShell}`);
+
+// ── Auto-Save Constants ──────────────────────────────────────────────────────
+export const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
+const MAX_AUTOSAVE_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
 export interface Annotation {
   id: string;
@@ -44,7 +56,13 @@ interface AppState {
   isSettingsOpen: boolean;
   settingsPosition: { x: number; y: number };
   currentSettingsTab: 'AI & Capture' | 'Hardware & Camera' | 'Manual Edit' | 'Appearance & Output';
-  
+
+  // Auto-Save & Persistence
+  isDirty: boolean;           // Flag: has unsaved changes
+  lastAutoSave: number;       // Timestamp of last auto-save
+  autoSaveEnabled: boolean;   // Toggle auto-save feature
+  autoSaveError: string | null; // Last auto-save error message
+
   // Device State
   isCameraRunning: boolean;
   cameraIndex: number;
@@ -82,6 +100,7 @@ interface AppState {
   filterMin: number;
   filterMax: number;
   exportPath: string;
+  excelLanguage: 'th' | 'en';  // Excel export language
 
   // Hotkeys
   hotkeyLiveAI: string;
@@ -101,6 +120,14 @@ interface AppState {
   setSettingsOpen: (open: boolean) => void;
   setSettingsPosition: (pos: { x: number; y: number }) => void;
   setSettingsTab: (tab: AppState['currentSettingsTab']) => void;
+
+  // Auto-Save Actions
+  setIsDirty: (dirty: boolean) => void;
+  triggerAutoSave: () => Promise<void>;
+  setAutoSaveEnabled: (enabled: boolean) => void;
+  clearAutoSaveError: () => void;
+  loadFromAutoSave: () => Promise<boolean>;
+  clearAutoSave: () => void;
   
   // Camera/AI Actions
   toggleCamera: () => void;
@@ -137,6 +164,7 @@ interface AppState {
   setTargetSize: (size: number) => void;
   setFilterRange: (min: number, max: number) => void;
   setExportPath: (path: string) => void;
+  setExcelLanguage: (lang: 'th' | 'en') => void;
   fetchSessionAndAddToSlide: () => Promise<void>;
   resetSession: () => Promise<void>;
   triggerSave: () => Promise<void>;
@@ -167,6 +195,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   isSettingsOpen: false,
   settingsPosition: INITIAL_SETTINGS_POS,
   currentSettingsTab: 'AI & Capture',
+
+  // Auto-Save state
+  isDirty: false,
+  lastAutoSave: 0,
+  autoSaveEnabled: true,
+  autoSaveError: null,
 
   isCameraRunning: false,
   cameraIndex: 0,
@@ -200,6 +234,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   filterMin: 10.0,
   filterMax: 30.0,
   exportPath: '',
+  excelLanguage: 'th',  // Default to Thai
 
   hotkeyLiveAI: 'F5',
   hotkeySnapshot: 'Space',
@@ -209,29 +244,138 @@ export const useAppStore = create<AppState>((set, get) => ({
   fillOpacity: 0.2,
   annotationColor: '#00FF00',
 
-  setProjectName: (projectName) => set({ projectName }),
-  setMode: (mode) => set({ mode }),
+  setProjectName: (projectName) => { set({ projectName, isDirty: true }); },
+  setMode: (mode) => set({ mode, isDirty: true }),
   setTheme: (theme) => {
     set({ theme });
     document.documentElement.classList.remove('dark', 'light', 'warm');
     document.documentElement.classList.add(theme);
-    localStorage.setItem('dd-theme', theme);
+    localStorage.setItem(LS_KEYS.THEME, theme);
   },
   setShell: (shell) => {
     set({ shell });
     document.documentElement.classList.remove('shell-macos', 'shell-windows');
     document.documentElement.classList.add(`shell-${shell}`);
-    localStorage.setItem('dd-shell', shell);
+    localStorage.setItem(LS_KEYS.SHELL, shell);
   },
   setSettingsOpen: (isSettingsOpen) => set({ isSettingsOpen }),
   setSettingsPosition: (settingsPosition) => set({ settingsPosition }),
   setSettingsTab: (currentSettingsTab) => set({ currentSettingsTab }),
 
-  toggleCamera: () => set((state) => ({ isCameraRunning: !state.isCameraRunning, isAIRunning: false })),
-  switchCamera: () => set((state) => ({ cameraIndex: (state.cameraIndex + 1) % 6 })),
-  setAIRunning: (isAIRunning) => set({ isAIRunning }),
-  setObjectiveLens: (lens) => set({ objectiveLens: lens }),
-  setAIConfidence: (aiConfidence) => set({ aiConfidence }),
+  // Auto-Save actions
+  setIsDirty: (isDirty) => set({ isDirty }),
+  setAutoSaveEnabled: (autoSaveEnabled) => set({ autoSaveEnabled }),
+  clearAutoSaveError: () => set({ autoSaveError: null }),
+  
+  triggerAutoSave: async () => {
+    const { projectName, targetSize, slides, exportPath } = get();
+    
+    // Skip if no changes
+    if (!get().isDirty && get().lastAutoSave > 0) {
+      return;
+    }
+
+    try {
+      const savePath = exportPath || await getSafeWorkspaceDir();
+      const autosaveDir = `${savePath}/.autosave`;
+      
+      // Create autosave directory payload
+      const autosaveData = {
+        project_name: projectName,
+        target_size: targetSize,
+        slides: slides.map((s: Slide) => ({ id: s.id, name: s.name, droplets: s.droplets })),
+        timestamp: Date.now(),
+      };
+
+      // Save to localStorage as backup (for crash recovery)
+      try {
+        localStorage.setItem(LS_KEYS.AUTO_SAVE, JSON.stringify(autosaveData));
+      } catch (lsError) {
+        // localStorage full (quota exceeded)
+        console.warn('[Auto-Save] localStorage full, using disk only:', lsError);
+        // Continue with disk save anyway
+      }
+
+      // Also save to disk via backend (silent, no alert)
+      const payload = {
+        project_name: `${projectName}_autosave_${Date.now()}`,
+        target_size: targetSize,
+        save_directory: autosaveDir,
+        slides: autosaveData.slides,
+      };
+
+      const response = await fetch(`${API_BASE}/api/save-project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        set({ lastAutoSave: Date.now(), autoSaveError: null });
+        console.log('[Auto-Save] Success:', new Date().toISOString());
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.detail || 'Unknown error';
+        
+        // Check for disk full error
+        if (errorMsg.includes('disk') || errorMsg.includes('space') || errorMsg.includes('No space left')) {
+          set({ autoSaveError: 'Auto-save failed: Disk is full' });
+        } else {
+          set({ autoSaveError: 'Auto-save failed: ' + errorMsg });
+        }
+        throw new Error(errorMsg);
+      }
+    } catch (error) {
+      console.error('[Auto-Save] Error:', error);
+      // Don't set error state if it's a network error (backend might be offline)
+      if ((error as Error).message !== 'Failed to fetch') {
+        set({ autoSaveError: 'Auto-save failed: ' + (error as Error).message });
+      }
+      // Don't alert user during auto-save, just log
+    }
+  },
+
+  loadFromAutoSave: async () => {
+    try {
+      const saved = localStorage.getItem(LS_KEYS.AUTO_SAVE);
+      if (!saved) return false;
+
+      const data = JSON.parse(saved);
+      
+      // Check if autosave is too old (7 days)
+      const age = Date.now() - (data.timestamp || 0);
+      if (age > MAX_AUTOSAVE_AGE) {
+        localStorage.removeItem(LS_KEYS.AUTO_SAVE);
+        return false;
+      }
+
+      // Load into state
+      set({
+        projectName: data.project_name?.replace('_autosave_', '') || 'Recovered Project',
+        targetSize: data.target_size || 224,
+        slides: data.slides || initialSlides,
+        activeSlideId: data.slides?.[0]?.id || null,
+        mode: 'Report',
+        lastAutoSave: Date.now(),
+      });
+
+      return true;
+    } catch (error) {
+      console.error('[Auto-Save Load] Error:', error);
+      return false;
+    }
+  },
+
+  clearAutoSave: () => {
+    localStorage.removeItem(LS_KEYS.AUTO_SAVE);
+    set({ lastAutoSave: 0, autoSaveError: null });
+  },
+
+  toggleCamera: () => set((state) => ({ isCameraRunning: !state.isCameraRunning, isAIRunning: false, isDirty: true })),
+  switchCamera: () => set((state) => ({ cameraIndex: (state.cameraIndex + 1) % 6, isDirty: true })),
+  setAIRunning: (isAIRunning) => set({ isAIRunning, isDirty: true }),
+  setObjectiveLens: (lens) => set({ objectiveLens: lens, isDirty: true }),
+  setAIConfidence: (aiConfidence) => set({ aiConfidence, isDirty: true }),
   setHardwareInfo: (info) => set({
     hardwareProfile: info.profile,
     ramGb: info.ram_gb,
@@ -254,21 +398,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
 
   addAnnotation: (ann) => {
-    set((state) => ({ annotations: [...state.annotations, ann] }));
+    set((state) => ({ annotations: [...state.annotations, ann], isDirty: true }));
     get().syncManualAnnotations();
   },
   updateAnnotation: (id, updates) => {
     set((state) => ({
-      annotations: state.annotations.map(a => a.id === id ? { ...a, ...updates } : a)
+      annotations: state.annotations.map(a => a.id === id ? { ...a, ...updates } : a),
+      isDirty: true
     }));
     get().syncManualAnnotations();
   },
   deleteAnnotation: (id) => {
-    set((state) => ({ annotations: state.annotations.filter(a => a.id !== id) }));
+    set((state) => ({ annotations: state.annotations.filter(a => a.id !== id), isDirty: true }));
     get().syncManualAnnotations();
   },
   clearAnnotations: () => {
-    set({ annotations: [] });
+    set({ annotations: [], isDirty: true });
     get().syncManualAnnotations();
   },
   syncManualAnnotations: async () => {
@@ -293,24 +438,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addSlide: () => set((state) => {
     const newSlide: Slide = { id: uuidv4(), name: `Slide ${state.slides.length + 1}`, droplets: [], status: 'Pending', timestamp: '' };
-    return { slides: [...state.slides, newSlide], activeSlideId: newSlide.id };
+    return { slides: [...state.slides, newSlide], activeSlideId: newSlide.id, isDirty: true };
   }),
-  removeSlide: (id) => set((state) => ({ 
+  removeSlide: (id) => set((state) => ({
     slides: state.slides.filter(s => s.id !== id),
-    activeSlideId: state.activeSlideId === id ? null : state.activeSlideId
+    activeSlideId: state.activeSlideId === id ? null : state.activeSlideId,
+    isDirty: true
   })),
   setActiveSlideId: (activeSlideId) => set({ activeSlideId }),
   updateSlideData: (id, droplets) => set((state) => ({
-    slides: state.slides.map(s => s.id === id ? { ...s, droplets: [...s.droplets, ...droplets], status: 'Completed', timestamp: new Date().toLocaleString() } : s)
+    slides: state.slides.map(s => s.id === id ? { ...s, droplets: [...s.droplets, ...droplets], status: 'Completed', timestamp: new Date().toLocaleString() } : s),
+    isDirty: true
   })),
   retakeSlide: (id) => set((state) => ({
     slides: state.slides.map(s => s.id === id ? { ...s, droplets: [], status: 'Pending' } : s),
     activeSlideId: id,
-    mode: 'Analyze'
+    mode: 'Analyze',
+    isDirty: true
   })),
-  setTargetSize: (targetSize) => set({ targetSize }),
-  setFilterRange: (filterMin, filterMax) => set({ filterMin, filterMax }),
+  setTargetSize: (targetSize) => set({ targetSize, isDirty: true }),
+  setFilterRange: (filterMin, filterMax) => set({ filterMin, filterMax, isDirty: true }),
   setExportPath: (exportPath) => set({ exportPath }),
+  setExcelLanguage: (excelLanguage) => set({ excelLanguage }),
   fetchSessionAndAddToSlide: async () => {
     const { activeSlideId, filterMin, filterMax, targetSize } = get();
     if (!activeSlideId) {
@@ -372,7 +521,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   triggerSave: async () => {
-    const { projectName, targetSize, slides, exportPath } = get();
+    const { projectName, targetSize, slides, exportPath, excelLanguage } = get();
     try {
       // Fall back to safe Documents/DropDetect_Projects folder if no path set
       const savePath = exportPath || await getSafeWorkspaceDir();
@@ -381,7 +530,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         project_name: projectName,
         target_size: targetSize,
         save_directory: savePath,
-        slides: slides.map((s: Slide) => ({ id: s.id, name: s.name, droplets: s.droplets }))
+        slides: slides.map((s: Slide) => ({ id: s.id, name: s.name, droplets: s.droplets })),
+        language: excelLanguage,  // Add language setting
       };
 
       const response = await fetch(`${API_BASE}/api/save-project`, {
@@ -392,6 +542,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (response.ok) {
         const result = await response.json();
+        // Clear dirty flag and auto-save on successful manual save
+        get().clearAutoSave();
+        set({ isDirty: false });
+        
+        // Cleanup old autosave files (silent, non-blocking)
+        fetch(`${API_BASE}/api/cleanup-autosave?project_name=${encodeURIComponent(projectName)}`, {
+          method: 'POST'
+        }).catch(() => {}); // Ignore cleanup errors
+        
         alert(`Project saved to: ${result.drop_file}\nExcel Report: ${result.excel_file}`);
       } else {
         alert('Failed to save project.');

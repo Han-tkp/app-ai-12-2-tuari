@@ -17,12 +17,13 @@ const ManualEditTable: React.FC = () => {
   return (
     <div
       onMouseDown={onMouseDown}
-      style={{ 
-        left: `${manualEditPosition.x}px`, 
+      style={{
+        left: `${manualEditPosition.x}px`,
         top: `${manualEditPosition.y}px`,
-        position: 'fixed'
+        position: 'fixed',
+        boxShadow: '0 12px 48px rgba(0,0,0,0.65), 0 0 0 1px var(--border-strong)'
       }}
-      className="w-[400px] bg-[var(--bg-sidebar)] backdrop-blur-2xl border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-[500] pointer-events-auto cursor-default"
+      className="w-[400px] bg-[var(--bg-sidebar)] border border-[var(--border-strong)] rounded-[6px] overflow-hidden animate-in zoom-in-95 duration-200 z-[500] pointer-events-auto cursor-default"
     >
       {/* Table Header */}
       <div className="bg-[var(--bg-surface2)] px-4 py-3 border-b border-[var(--border)] flex items-center justify-between cursor-move">

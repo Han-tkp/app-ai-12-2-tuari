@@ -4,10 +4,10 @@ import TopDashboard from '../components/dashboard/TopDashboard';
 import Workspace from '../components/workspace/Workspace';
 import SettingsWindow from '../components/SettingsWindow';
 import { useAppStore } from '../store/useAppStore';
-import { ChevronDown, FileCode, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X } from 'lucide-react';
+import { ChevronDown, FileCode, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X, Cloud, CloudOff, AlertCircle } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readFile } from '@tauri-apps/plugin-fs';
+import { AUTO_SAVE_INTERVAL } from '../store/useAppStore';
 
 const appWindow = getCurrentWindow();
 
@@ -16,9 +16,48 @@ const AppLayout: React.FC = () => {
     setSettingsOpen, projectName, setProjectName, resetSession, triggerSave,
     hotkeyLiveAI, hotkeySnapshot, isCameraRunning, isAIRunning, setAIRunning,
     loadProjectData, shell,
+    isDirty, autoSaveEnabled, lastAutoSave, autoSaveError,
+    triggerAutoSave, setAutoSaveEnabled, clearAutoSaveError, setIsDirty, clearAutoSave,
+    loadFromAutoSave,
   } = useAppStore();
-  // triggerSave is used by Export Excel Data menu item and Ctrl+S shortcut
+  
   const [isFileMenuOpen, setFileMenuOpen] = useState(false);
+  const [showRecoverDialog, setShowRecoverDialog] = useState(false);
+
+  // ── Auto-Save Interval ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!autoSaveEnabled) return;
+
+    const interval = setInterval(() => {
+      if (useAppStore.getState().isDirty) {
+        triggerAutoSave();
+      }
+    }, AUTO_SAVE_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [autoSaveEnabled, triggerAutoSave]);
+
+  // ── Check for Auto-Save Recovery on Mount ──────────────────────────────────
+  useEffect(() => {
+    const checkRecovery = async () => {
+      const hasAutoSave = await loadFromAutoSave();
+      if (hasAutoSave) {
+        setShowRecoverDialog(true);
+      }
+    };
+    checkRecovery();
+  }, []);
+
+  // ── Cleanup auto-save on clean exit ────────────────────────────────────────
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Clear auto-save on clean exit
+      useAppStore.getState().clearAutoSave();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -56,6 +95,8 @@ const AppLayout: React.FC = () => {
     if (name) {
       resetSession();
       setProjectName(name);
+      clearAutoSave();
+      setIsDirty(false);
     }
     setFileMenuOpen(false);
   };
@@ -105,9 +146,117 @@ const AppLayout: React.FC = () => {
     appWindow.close();
   };
 
+  // Format last auto-save time
+  const formatAutoSaveTime = (timestamp: number) => {
+    if (!timestamp) return 'Never';
+    const diff = Date.now() - timestamp;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    return `${hours}h ago`;
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden flex-col font-sans select-none relative bg-[var(--bg-window)] text-[var(--text1)]">
       <SettingsWindow />
+
+      {/* ── Recovery Dialog ─────────────────────────────────────────────────── */}
+      {showRecoverDialog && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className="w-[420px] rounded-lg border mac-dialog-shadow overflow-hidden animate-in zoom-in-95 duration-200"
+            style={{
+              background: 'var(--bg-surface)',
+              borderColor: 'var(--border-strong)',
+            }}
+          >
+            <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <AlertCircle size={18} style={{ color: 'var(--mac-green)' }} />
+                <span className="text-[14px] font-semibold">Recover Unsaved Work?</span>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[13px]" style={{ color: 'var(--text2)' }}>
+                We found an auto-saved session from <strong>{formatAutoSaveTime(lastAutoSave)}</strong>. 
+                Would you like to recover it?
+              </p>
+            </div>
+            <div className="px-5 py-3 flex justify-end gap-2" style={{ background: 'var(--bg-surface2)' }}>
+              <button
+                onClick={() => {
+                  useAppStore.getState().clearAutoSave();
+                  setShowRecoverDialog(false);
+                }}
+                className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: 'var(--bg-surface3)', color: 'var(--text2)' }}
+              >
+                Start Fresh
+              </button>
+              <button
+                onClick={() => setShowRecoverDialog(false)}
+                className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                Recover Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Auto-Save Status Bar ───────────────────────────────────────────── */}
+      <div
+        className="h-6 flex items-center justify-between px-3 text-[10px] shrink-0"
+        style={{
+          background: autoSaveError ? 'rgba(239,68,68,0.1)' : 'var(--bg-titlebar)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <div className="flex items-center gap-2">
+          {autoSaveError ? (
+            <>
+              <AlertCircle size={11} style={{ color: 'var(--mac-red)' }} />
+              <span style={{ color: 'var(--mac-red)' }}>Auto-save failed</span>
+              <button
+                onClick={clearAutoSaveError}
+                className="underline"
+                style={{ color: 'var(--text3)' }}
+              >
+                Dismiss
+              </button>
+            </>
+          ) : (
+            <>
+              {isDirty ? (
+                <>
+                  <CloudOff size={11} style={{ color: 'var(--text4)' }} />
+                  <span style={{ color: 'var(--text3)' }}>Unsaved changes</span>
+                </>
+              ) : (
+                <>
+                  <Cloud size={11} style={{ color: 'var(--mac-green)' }} />
+                  <span style={{ color: 'var(--text3)' }}>
+                    Saved {formatAutoSaveTime(lastAutoSave)}
+                  </span>
+                </>
+              )}
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 cursor-pointer" style={{ color: 'var(--text3)' }}>
+            <input
+              type="checkbox"
+              checked={autoSaveEnabled}
+              onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+              className="accent-[var(--accent)]"
+            />
+            <span className="text-[10px]">Auto-save</span>
+          </label>
+        </div>
+      </div>
 
       {/* Title Bar — layout adapts to shell preference */}
       <div
@@ -157,7 +306,7 @@ const AppLayout: React.FC = () => {
               {isFileMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setFileMenuOpen(false)}></div>
-                  <div className="absolute top-full left-0 mt-1 w-64 bg-[var(--bg-sidebar)] backdrop-blur-2xl border border-[var(--border)] rounded-xl shadow-2xl z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+                  <div className="absolute top-full left-0 mt-1 w-64 bg-[var(--bg-sidebar)] border border-[var(--border-strong)] rounded-[5px] z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100 origin-top-left" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
                     <MenuItem icon={<FilePlus size={14}/>} label="New Project..." shortcut="Ctrl+N" onClick={handleNewProject} />
                     <MenuItem icon={<FolderOpen size={14}/>} label="Open Project..." shortcut="Ctrl+O" onClick={handleOpenProject} />
                     <div className="h-px bg-[var(--separator)] my-1.5 mx-2"></div>
@@ -175,14 +324,19 @@ const AppLayout: React.FC = () => {
           </div>
         </div>
 
-        {/* Center Title — absolute so it stays truly centered */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center space-x-2 pointer-events-none">
-          <div className="w-[18px] h-[18px] bg-[var(--accent)] rounded-[4px] flex items-center justify-center shadow-lg shadow-[var(--accent)]/20">
-            <FileCode size={11} color="white" />
+        {/* Center Title */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+          <div
+            className="w-[18px] h-[18px] flex items-center justify-center rounded"
+            style={{ background: 'var(--accent)' }}
+          >
+            <FileCode size={11} color="white" strokeWidth={2.5} />
           </div>
-          <span className="text-[13px] font-semibold tracking-tight text-[var(--text1)]">
-            DropDetect <span className="text-[var(--text3)] font-normal ml-1">— {projectName}*</span>
+          <span className="text-[13px] font-semibold" style={{ color: 'var(--text1)' }}>
+            DropDetect
           </span>
+          <span className="text-[12px]" style={{ color: 'var(--text4)' }}>—</span>
+          <span className="text-[12px]" style={{ color: 'var(--text3)' }}>{projectName}</span>
         </div>
 
         {/* Right cluster — Windows chrome buttons */}

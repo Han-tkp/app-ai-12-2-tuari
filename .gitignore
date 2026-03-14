@@ -32,3 +32,6 @@ __pycache__/
 
 # Tauri build output
 src-tauri/target/
+
+.qwen/
+gha-creds-*.json
