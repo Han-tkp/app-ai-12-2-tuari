@@ -333,7 +333,7 @@ def _build_excel(req: "SaveProjectRequest", excel_path: str, lang='th'):
         who_cell = ws.cell(row=row_idx, column=7, value=who_text)
         who_cell.font = Font(bold=True, color="008000" if who_pass else "FF0000")
         
-        pct_cell = ws.cell(row=row_idx, column=8, value=round(in_range_pct, 1))
+        pct_cell = ws.cell(row=row_idx, column=8, value=round(in_range_pct / 100, 3))
         pct_cell.number_format = "0.0%"
         
         for col in range(1, 9):
@@ -438,7 +438,7 @@ def _build_excel(req: "SaveProjectRequest", excel_path: str, lang='th'):
         ws2.cell(row=2, column=4, value=L.get('pass') if who_pass else L.get('fail')).font = Font(bold=True, color="008000" if who_pass else "FF0000")
         
         ws2.cell(row=3, column=3, value=L.get('in_range')).font = Font(bold=True, size=10)
-        ws2.cell(row=3, column=4, value=round(in_range_pct, 1)).number_format = "0.0%"
+        ws2.cell(row=3, column=4, value=round(in_range_pct / 100, 3)).number_format = "0.0%"
 
         # Raw data header
         hdr_row = 5
@@ -520,98 +520,6 @@ def _build_excel(req: "SaveProjectRequest", excel_path: str, lang='th'):
     # Save
     os.makedirs(os.path.dirname(excel_path) if os.path.dirname(excel_path) else ".", exist_ok=True)
     wb.save(excel_path)
-
-
-def _add_summary_chart(wb, ws, slides, stats_list, header_row, num_slides):
-    """Add distribution chart to Summary sheet."""
-
-    # Create chart data range
-    chart_row_start = header_row + num_slides + 4
-    chart_row_end = header_row + num_slides + 4 + len(slides) - 1
-    
-    # Add chart title row
-    ws.merge_cells(f"A{chart_row_start}:H{chart_row_start}")
-    ws[f"A{chart_row_start}"] = "VMD Distribution by Slide"
-    ws[f"A{chart_row_start}"].font = Font(bold=True, size=12)
-    ws.row_dimensions[chart_row_start].height = 24
-    
-    # Create chart
-    chart = BarChart()
-    chart.type = "col"
-    chart.style = 10
-    chart.title = "VMD Comparison (µm)"
-    chart.y_axis.title = "VMD (µm)"
-    chart.x_axis.title = "Slide"
-    
-    # Data range (VMD values)
-    data_ref = Reference(ws, min_col=3, min_row=header_row+1, max_row=header_row+num_slides, max_col=3)
-    cat_ref = Reference(ws, min_col=1, min_row=header_row+1, max_row=header_row+num_slides)
-    
-    chart.add_data(data_ref, titles_from_data=False)
-    chart.set_categories(cat_ref)
-    chart.shape = 4
-    chart.width = 12
-    chart.height = 8
-    
-    # Place chart
-    ws.add_chart(chart, f"A{chart_row_start+1}")
-
-
-def _add_slide_chart(wb, ws, diams, hdr_row, num_rows):
-    """Add distribution histogram to slide sheet."""
-
-    # Calculate distribution bins
-    bins = {"<10": 0, "10-15": 0, "15-20": 0, "20-25": 0, "25-30": 0, ">30": 0}
-    for d in diams:
-        if d < 10:
-            bins["<10"] += 1
-        elif d < 15:
-            bins["10-15"] += 1
-        elif d < 20:
-            bins["15-20"] += 1
-        elif d < 25:
-            bins["20-25"] += 1
-        elif d < 30:
-            bins["25-30"] += 1
-        else:
-            bins[">30"] += 1
-    
-    # Add bin data to sheet (hidden columns)
-    start_col = 8  # Column H
-    start_row = hdr_row + num_rows + 2
-    
-    ws.cell(row=start_row, column=start_col, value="Size Range (µm)")
-    ws.cell(row=start_row, column=start_col, value="Size Range (µm)").font = Font(bold=True)
-    ws.cell(row=start_row, column=start_col+1, value="Count")
-    ws.cell(row=start_row, column=start_col+1, value="Count").font = Font(bold=True)
-    
-    bin_labels = list(bins.keys())
-    bin_values = list(bins.values())
-    
-    for i, (label, count) in enumerate(zip(bin_labels, bin_values), start_row+1):
-        ws.cell(row=i, column=start_col, value=label)
-        ws.cell(row=i, column=start_col+1, value=count)
-    
-    # Create chart
-    chart = BarChart()
-    chart.type = "col"
-    chart.style = 10
-    chart.title = "Droplet Size Distribution"
-    chart.y_axis.title = "Count"
-    chart.x_axis.title = "Size Range (µm)"
-    
-    # Data range
-    data_ref = Reference(ws, min_col=start_col+1, min_row=start_row, max_row=start_row+len(bins), max_col=start_col+1)
-    cat_ref = Reference(ws, min_col=start_col, min_row=start_row+1, max_row=start_row+len(bins))
-    
-    chart.add_data(data_ref, titles_from_data=False)
-    chart.set_categories(cat_ref)
-    chart.shape = 4
-    chart.width = 12
-    chart.height = 8
-    
-    # Place chart
-    ws.add_chart(chart, f"A{start_row+1}")
 
 
 @app.post("/api/cleanup-autosave")
@@ -768,39 +676,29 @@ async def websocket_endpoint(websocket: WebSocket):
                     system.droplet_data.pop(droplet_id, None)
                     system.counted_ids.discard(droplet_id)
                 elif action == "export_excel":
-                    # Quick export: save Excel report to Documents/DropDetect_Projects
                     from pathlib import Path
-                    import os
                     docs = Path.home() / "Documents" / "DropDetect_Projects"
                     docs.mkdir(parents=True, exist_ok=True)
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     excel_path = docs / f"DropDetect_QuickExport_{timestamp}.xlsx"
-                    
-                    # Create a simple slide from current session data
+                    lang = msg.get("language", "th")
+
                     slide_data = SlideData(
                         id="quick_export",
                         name=f"Session {timestamp}",
                         droplets=[float(v) for v in system.droplet_data.values()]
                     )
-                    
-                    # Build minimal project for export
-                    class QuickExportRequest(BaseModel):
-                        project_name: str
-                        target_size: int
-                        save_directory: str
-                        slides: list[SlideData]
-                    
-                    req = QuickExportRequest(
+
+                    req = SaveProjectRequest(
                         project_name=f"QuickExport_{timestamp}",
                         target_size=224,
                         save_directory=str(docs),
-                        slides=[slide_data]
+                        slides=[slide_data],
+                        language=lang,
                     )
-                    
-                    # Reuse _build_excel function
-                    _build_excel(req, str(excel_path))
-                    
-                    # Notify frontend
+
+                    _build_excel(req, str(excel_path), lang=lang)
+
                     await websocket.send_json({
                         "action": "export_result",
                         "path": str(excel_path)
@@ -893,7 +791,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(payload)
             await asyncio.sleep(0.01)
     except WebSocketDisconnect:
-        cap.release()
+        pass
     finally:
         cap.release()
 

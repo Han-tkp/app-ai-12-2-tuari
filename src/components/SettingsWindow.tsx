@@ -292,23 +292,32 @@ const SettingsWindow: React.FC = () => {
                   <section className="space-y-3">
                     <h3 className="settings-section-title text-[11px]">Color Theme</h3>
                     <div className="flex gap-1 bg-[var(--bg-surface2)] p-1 rounded-xl border border-[var(--border)]">
-                      <SegBtn active={theme === 'dark'} onClick={() => setTheme('dark')} label="Dark"
-                        preview={<span className="w-3 h-3 rounded-full border border-white/20 shadow-inner" style={{ background: '#1c1c1e' }} />} />
-                      <SegBtn active={theme === 'light'} onClick={() => setTheme('light')} label="Light"
-                        preview={<span className="w-3 h-3 rounded-full border border-black/10 shadow-inner" style={{ background: '#f6f6f7' }} />} />
-                      <SegBtn active={theme === 'warm'} onClick={() => setTheme('warm')} label="Warm"
-                        preview={<span className="w-3 h-3 rounded-full border border-black/10 shadow-inner" style={{ background: '#fff3e0' }} />} />
+                      <SegBtn active={theme === 'dark'} onClick={() => setTheme('dark')} label="Zinc Dark"
+                        preview={<span className="w-3 h-3 rounded-full border border-white/20" style={{ background: '#18181b' }} />} />
+                      <SegBtn active={theme === 'light'} onClick={() => setTheme('light')} label="Stone Light"
+                        preview={<span className="w-3 h-3 rounded-full border border-black/10" style={{ background: '#fafaf9' }} />} />
+                      <SegBtn active={theme === 'warm'} onClick={() => setTheme('warm')} label="Slate Mid"
+                        preview={<span className="w-3 h-3 rounded-full border border-white/20" style={{ background: '#1e293b' }} />} />
                     </div>
                     {/* Theme preview swatches */}
                     <div className="grid grid-cols-3 gap-2">
-                      {(['dark', 'light', 'warm'] as const).map(t => (
+                      {([
+                        { key: 'dark' as const, bg: '#18181b', colors: ['#18181b','#27272a','#3f3f46','#52525b','#71717a','#2563eb'], fg: 'rgba(255,255,255,0.6)', label: 'Zinc' },
+                        { key: 'light' as const, bg: '#fafaf9', colors: ['#fafaf9','#f5f5f4','#e7e5e4','#d6d3d1','#a8a29e','#1e3a5f'], fg: '#78716c', label: 'Stone' },
+                        { key: 'warm' as const, bg: '#1e293b', colors: ['#1e293b','#334155','#475569','#64748b','#94a3b8','#3b82f6'], fg: 'rgba(255,255,255,0.6)', label: 'Slate' },
+                      ]).map(t => (
                         <button
-                          key={t}
-                          onClick={() => setTheme(t)}
-                          className={`h-10 rounded-xl border-2 transition-all overflow-hidden flex items-end px-2 pb-1.5 ${theme === t ? 'border-[var(--accent)] shadow-md' : 'border-[var(--border)] opacity-60 hover:opacity-90'}`}
-                          style={{ background: t === 'dark' ? '#1c1c1e' : t === 'light' ? '#f6f6f7' : '#fff3e0' }}
+                          key={t.key}
+                          onClick={() => setTheme(t.key)}
+                          className={`rounded-lg border-2 transition-all overflow-hidden flex flex-col ${theme === t.key ? 'border-[var(--accent)]' : 'border-[var(--border)] opacity-60 hover:opacity-90'}`}
+                          style={{ background: t.bg }}
                         >
-                          <span className="text-[8px] font-black uppercase" style={{ color: t === 'dark' ? 'rgba(255,255,255,0.6)' : '#6d4c41' }}>{t}</span>
+                          <div className="flex h-3 w-full">
+                            {t.colors.map((c, i) => (
+                              <div key={i} className="flex-1" style={{ background: c, flex: i === t.colors.length - 1 ? 0.6 : 1 }} />
+                            ))}
+                          </div>
+                          <span className="text-[8px] font-bold uppercase px-2 py-1" style={{ color: t.fg }}>{t.label}</span>
                         </button>
                       ))}
                     </div>
@@ -344,11 +353,11 @@ const SettingsWindow: React.FC = () => {
                           <tr>
                             <td className="p-3 text-[var(--text3)]">Active Profile</td>
                             <td className="p-3 text-right">
-                              <span className={`font-black uppercase text-[10px] ${
-                                hardwareProfile === 'low' ? 'text-[var(--mac-orange)]' :
-                                hardwareProfile === 'mid' ? 'text-[var(--mac-yellow,#f5a623)]' :
-                                'text-[var(--mac-green)]'
-                              }`}>{hardwareProfile}</span>
+                              <span className="font-black uppercase text-[10px]" style={{
+                                color: hardwareProfile === 'low' ? 'var(--mac-orange)' :
+                                       hardwareProfile === 'mid' ? 'var(--mac-yellow)' :
+                                       'var(--mac-green)'
+                              }}>{hardwareProfile}</span>
                             </td>
                           </tr>
                           <tr>

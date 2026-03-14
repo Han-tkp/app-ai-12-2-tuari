@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #3b82f6;
+  --color-accent: #2563eb;
   --color-mac-red: #ef4444;
   --color-mac-orange: #f97316;
   --color-mac-green: #22c55e;
@@ -17,37 +17,70 @@
 }
 
 @layer base {
+  /* ── Stone Light ─────────────────────────────────────────────────── */
   :root {
-    --accent: #3b82f6;
+    --accent: #1e3a5f;
     --mac-red: #ef4444;
     --mac-orange: #f97316;
     --mac-green: #22c55e;
     --mac-teal: #14b8a6;
     --mac-yellow: #eab308;
 
-    --bg-window: #f5f6f8;
-    --bg-titlebar: #eef0f4;
-    --bg-sidebar: #eef0f4;
-    --bg-surface: #ffffff;
-    --bg-surface2: #f5f6f8;
-    --bg-surface3: #eaecf0;
+    --bg-window: #fafaf9;
+    --bg-titlebar: #f5f5f4;
+    --bg-sidebar: #f5f5f4;
+    --bg-surface: #f5f5f4;
+    --bg-surface2: #e7e5e4;
+    --bg-surface3: #d6d3d1;
     --bg-hover: rgba(0, 0, 0, 0.04);
-    --bg-active: rgba(59, 130, 246, 0.10);
+    --bg-active: rgba(30, 58, 95, 0.08);
     --bg-input: #ffffff;
-    --bg-viewport: #dde1e9;
-    --border: rgba(0, 0, 0, 0.09);
-    --border-strong: rgba(0, 0, 0, 0.15);
-    --text1: #111827;
-    --text2: #374151;
-    --text3: #6b7280;
-    --text4: #9ca3af;
-    --accent-text: #2563eb;
-    --separator: rgba(0, 0, 0, 0.06);
-    --scrollbar: rgba(0, 0, 0, 0.15);
+    --bg-viewport: #e7e5e4;
+    --border: #d6d3d1;
+    --border-strong: #a8a29e;
+    --text1: #1c1917;
+    --text2: #44403c;
+    --text3: #78716c;
+    --text4: #a8a29e;
+    --accent-text: #1e3a5f;
+    --separator: #e7e5e4;
+    --scrollbar: #a8a29e;
     --blur: blur(0px);
   }
 
+  /* ── Zinc Dark (primary) ─────────────────────────────────────────── */
   .dark {
+    --accent: #2563eb;
+    --mac-red: #ef4444;
+    --mac-orange: #f97316;
+    --mac-green: #22c55e;
+    --mac-teal: #14b8a6;
+    --mac-yellow: #eab308;
+
+    --bg-window: #18181b;
+    --bg-titlebar: #1f1f23;
+    --bg-sidebar: #1f1f23;
+    --bg-surface: #27272a;
+    --bg-surface2: #2e2e33;
+    --bg-surface3: #3f3f46;
+    --bg-hover: rgba(255, 255, 255, 0.04);
+    --bg-active: rgba(37, 99, 235, 0.12);
+    --bg-input: #18181b;
+    --bg-viewport: #09090b;
+    --border: #3f3f46;
+    --border-strong: #52525b;
+    --text1: #fafafa;
+    --text2: #a1a1aa;
+    --text3: #71717a;
+    --text4: #52525b;
+    --accent-text: #3b82f6;
+    --separator: #27272a;
+    --scrollbar: #3f3f46;
+    --blur: blur(0px);
+  }
+
+  /* ── Slate Mid ───────────────────────────────────────────────────── */
+  .warm {
     --accent: #3b82f6;
     --mac-red: #ef4444;
     --mac-orange: #f97316;
@@ -55,55 +88,25 @@
     --mac-teal: #14b8a6;
     --mac-yellow: #eab308;
 
-    --bg-window: #18191d;
-    --bg-titlebar: #111215;
-    --bg-sidebar: #111215;
-    --bg-surface: #1e2026;
-    --bg-surface2: #22252c;
-    --bg-surface3: #2a2d36;
-    --bg-hover: rgba(255, 255, 255, 0.04);
+    --bg-window: #1e293b;
+    --bg-titlebar: #1e293b;
+    --bg-sidebar: #1e293b;
+    --bg-surface: #334155;
+    --bg-surface2: #3d4f69;
+    --bg-surface3: #475569;
+    --bg-hover: rgba(255, 255, 255, 0.05);
     --bg-active: rgba(59, 130, 246, 0.12);
-    --bg-input: #13151a;
-    --bg-viewport: #0c0e12;
-    --border: #2a2d35;
-    --border-strong: #363a44;
-    --text1: #f1f3f5;
-    --text2: #9ca3af;
-    --text3: #6b7280;
-    --text4: #4b5563;
+    --bg-input: #1e293b;
+    --bg-viewport: #0f172a;
+    --border: #475569;
+    --border-strong: #64748b;
+    --text1: #f1f5f9;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --text4: #475569;
     --accent-text: #60a5fa;
-    --separator: #1e2128;
-    --scrollbar: #363a44;
-    --blur: blur(0px);
-  }
-
-  .warm {
-    --accent: #e65100;
-    --mac-red: #ef4444;
-    --mac-orange: #f97316;
-    --mac-green: #22c55e;
-    --mac-teal: #14b8a6;
-    --mac-yellow: #eab308;
-
-    --bg-window: #fff3e0;
-    --bg-titlebar: #fff0d8;
-    --bg-sidebar: #fff0d8;
-    --bg-surface: #ffffff;
-    --bg-surface2: #fff8f0;
-    --bg-surface3: #ffe0b2;
-    --bg-hover: rgba(230, 81, 0, 0.05);
-    --bg-active: rgba(230, 81, 0, 0.10);
-    --bg-input: #ffffff;
-    --bg-viewport: #fce4d6;
-    --border: rgba(0, 0, 0, 0.08);
-    --border-strong: rgba(0, 0, 0, 0.14);
-    --text1: #3e2723;
-    --text2: #6d4c41;
-    --text3: #8d6e63;
-    --text4: #a1887f;
-    --accent-text: #e65100;
-    --separator: rgba(0, 0, 0, 0.06);
-    --scrollbar: rgba(0, 0, 0, 0.12);
+    --separator: #334155;
+    --scrollbar: #475569;
     --blur: blur(0px);
   }
 
@@ -111,9 +114,9 @@
     background-color: var(--bg-window);
     color: var(--text1);
     @apply m-0 p-0 overflow-hidden;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', 'DM Sans', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
-    transition: background-color 0.3s, color 0.3s;
+    transition: background-color 0.2s, color 0.2s;
   }
 }
 
@@ -182,7 +185,7 @@
 
   /* Primary button */
   .btn-primary {
-    @apply w-full h-10 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-colors;
+    @apply w-full h-9 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-all;
     background: var(--accent);
     color: #fff;
   }
@@ -191,7 +194,7 @@
 
   /* Danger/stop button */
   .btn-danger {
-    @apply w-full h-10 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-colors border;
+    @apply w-full h-9 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-all border;
     border-color: rgba(239, 68, 68, 0.35);
     background: rgba(239, 68, 68, 0.08);
     color: var(--mac-red);
@@ -200,26 +203,35 @@
 
   /* Secondary button */
   .btn-secondary {
-    @apply w-full h-9 rounded-lg flex items-center justify-center gap-2 font-medium text-[12px] transition-colors border;
-    border-color: var(--border-strong);
-    background: var(--bg-surface2);
+    @apply w-full h-8 rounded-lg flex items-center justify-center gap-2 font-medium text-[12px] transition-all border;
+    border-color: var(--border);
+    background: var(--bg-surface);
     color: var(--text2);
   }
-  .btn-secondary:hover { background: var(--bg-surface3); color: var(--text1); }
+  .btn-secondary:hover { background: var(--bg-surface2); color: var(--text1); }
   .btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
 
   /* Success button */
   .btn-success {
-    @apply w-full h-10 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-colors border;
+    @apply w-full h-9 rounded-lg flex items-center justify-center gap-2 font-semibold text-[12px] transition-all border;
     border-color: rgba(34, 197, 94, 0.35);
-    background: rgba(34, 197, 94, 0.10);
+    background: rgba(34, 197, 94, 0.08);
     color: var(--mac-green);
   }
-  .btn-success:hover { background: rgba(34, 197, 94, 0.18); }
+  .btn-success:hover { background: rgba(34, 197, 94, 0.15); }
+
+  /* Reset button (zoom bar) */
+  .reset-btn {
+    @apply text-[10px] font-medium px-2 py-0.5 rounded transition-all;
+    color: var(--text3);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+  }
+  .reset-btn:hover { color: var(--text1); background: var(--bg-surface2); }
 }
 
 .font-instrument {
-  font-family: 'Consolas', 'Cascadia Code', ui-monospace, monospace;
+  font-family: 'JetBrains Mono', 'Consolas', 'Cascadia Code', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 

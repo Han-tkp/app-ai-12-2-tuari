@@ -8,6 +8,7 @@ import { ChevronDown, FileCode, FolderOpen, Save, FilePlus, LogOut, Download, Mi
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AUTO_SAVE_INTERVAL } from '../store/useAppStore';
+import { API_BASE } from '../config';
 
 const appWindow = getCurrentWindow();
 
@@ -18,7 +19,7 @@ const AppLayout: React.FC = () => {
     loadProjectData, shell,
     isDirty, autoSaveEnabled, lastAutoSave, autoSaveError,
     triggerAutoSave, setAutoSaveEnabled, clearAutoSaveError, setIsDirty, clearAutoSave,
-    loadFromAutoSave,
+    loadFromAutoSave, confirmAutoSaveRecovery,
   } = useAppStore();
   
   const [isFileMenuOpen, setFileMenuOpen] = useState(false);
@@ -114,7 +115,7 @@ const AppLayout: React.FC = () => {
         // For simplicity, let's add a backend endpoint to "load" if needed, 
         // or just expect project.json if we want to be quick.
         // Let's assume we can fetch the project info from backend for safety.
-        const response = await fetch(`http://localhost:8000/api/load-project?path=${encodeURIComponent(selected)}`);
+        const response = await fetch(`${API_BASE}/api/load-project?path=${encodeURIComponent(selected)}`);
         if (response.ok) {
           const data = await response.json();
           loadProjectData(data);
@@ -195,7 +196,10 @@ const AppLayout: React.FC = () => {
                 Start Fresh
               </button>
               <button
-                onClick={() => setShowRecoverDialog(false)}
+                onClick={() => {
+                  confirmAutoSaveRecovery();
+                  setShowRecoverDialog(false);
+                }}
                 className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
                 style={{ background: 'var(--accent)', color: '#fff' }}
               >

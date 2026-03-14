@@ -127,6 +127,7 @@ interface AppState {
   setAutoSaveEnabled: (enabled: boolean) => void;
   clearAutoSaveError: () => void;
   loadFromAutoSave: () => Promise<boolean>;
+  confirmAutoSaveRecovery: () => void;
   clearAutoSave: () => void;
   
   // Camera/AI Actions
@@ -245,7 +246,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   annotationColor: '#00FF00',
 
   setProjectName: (projectName) => { set({ projectName, isDirty: true }); },
-  setMode: (mode) => set({ mode, isDirty: true }),
+  setMode: (mode) => set({ mode }),
   setTheme: (theme) => {
     set({ theme });
     document.documentElement.classList.remove('dark', 'light', 'warm');
@@ -341,7 +342,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!saved) return false;
 
       const data = JSON.parse(saved);
-      
+
       // Check if autosave is too old (7 days)
       const age = Date.now() - (data.timestamp || 0);
       if (age > MAX_AUTOSAVE_AGE) {
@@ -349,20 +350,30 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
-      // Load into state
+      // Only return true to indicate recoverable data exists
+      // Don't load into state yet — wait for user confirmation
+      return true;
+    } catch (error) {
+      console.error('[Auto-Save Load] Error:', error);
+      return false;
+    }
+  },
+
+  confirmAutoSaveRecovery: () => {
+    try {
+      const saved = localStorage.getItem(LS_KEYS.AUTO_SAVE);
+      if (!saved) return;
+      const data = JSON.parse(saved);
       set({
-        projectName: data.project_name?.replace('_autosave_', '') || 'Recovered Project',
+        projectName: data.project_name?.replace(/_autosave_\d+/, '') || 'Recovered Project',
         targetSize: data.target_size || 224,
         slides: data.slides || initialSlides,
         activeSlideId: data.slides?.[0]?.id || null,
         mode: 'Report',
         lastAutoSave: Date.now(),
       });
-
-      return true;
     } catch (error) {
-      console.error('[Auto-Save Load] Error:', error);
-      return false;
+      console.error('[Auto-Save Recovery] Error:', error);
     }
   },
 
@@ -372,7 +383,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   toggleCamera: () => set((state) => ({ isCameraRunning: !state.isCameraRunning, isAIRunning: false, isDirty: true })),
-  switchCamera: () => set((state) => ({ cameraIndex: (state.cameraIndex + 1) % 6, isDirty: true })),
+  switchCamera: () => set((state) => ({ cameraIndex: (state.cameraIndex + 1) % 6 })),
   setAIRunning: (isAIRunning) => set({ isAIRunning, isDirty: true }),
   setObjectiveLens: (lens) => set({ objectiveLens: lens, isDirty: true }),
   setAIConfidence: (aiConfidence) => set({ aiConfidence, isDirty: true }),

@@ -75,7 +75,7 @@ const AnnotationLayer: React.FC<{ width: number; height: number; scale: number }
   };
 
   return (
-    <div className="absolute inset-0 pointer-events-auto">
+    <div className={`absolute inset-0 ${isManualEditActive ? 'pointer-events-auto' : 'pointer-events-none'}`}>
       <Stage
         width={width * scale}
         height={height * scale}

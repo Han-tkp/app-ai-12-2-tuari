@@ -46,7 +46,7 @@ const Sidebar: React.FC = () => {
 
   const handleExport = () => {
     if (mode === 'Report') triggerSave();
-    else window.dispatchEvent(new CustomEvent('send-backend-command', { detail: { action: 'export_excel' } }));
+    else window.dispatchEvent(new CustomEvent('send-backend-command', { detail: { action: 'export_excel', language: excelLanguage } }));
   };
 
   const handleSnapshot = () => {

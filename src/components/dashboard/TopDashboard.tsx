@@ -25,10 +25,11 @@ const TopDashboard: React.FC = () => {
   const statusColor  = STATUS_COLOR[activeSlide?.status ?? ''] ?? 'var(--text4)';
   const profileColor = PROFILE_COLOR[hardwareProfile] ?? 'var(--text3)';
 
-  // WHO Compliance: VMD 10-30 µm, SPAN ≤ 2.0, Count ≥ 200
-  const whoPass = vmd >= 10 && vmd <= 30 && span <= 2.0;
-  const whoColor = whoPass ? 'var(--mac-green)' : 'var(--mac-red)';
-  const whoIcon = whoPass ? '✓' : '✗';
+  // WHO Compliance: VMD 10-30 µm, SPAN ≤ 2.0, minimum 10 droplets
+  const hasData = accumulated >= 10;
+  const whoPass = hasData && vmd >= 10 && vmd <= 30 && span <= 2.0;
+  const whoColor = !hasData ? 'var(--text4)' : whoPass ? 'var(--mac-green)' : 'var(--mac-red)';
+  const whoIcon = !hasData ? '—' : whoPass ? '✓' : '✗';
 
   return (
     <div className="flex h-full items-stretch">
@@ -102,7 +103,7 @@ const TopDashboard: React.FC = () => {
               className="text-[11px] font-semibold"
               style={{ color: whoColor }}
             >
-              {whoPass ? 'Pass' : 'Fail'}
+              {!hasData ? 'N/A' : whoPass ? 'Pass' : 'Fail'}
             </span>
           </div>
         </div>

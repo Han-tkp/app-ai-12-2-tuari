@@ -97,7 +97,7 @@ const SessionDropletTable: React.FC = () => {
           {activeSlide && (
             <span
               className="font-instrument text-[9px] px-1.5 py-0.5 rounded-[2px] border"
-              style={{ color: 'var(--accent-text)', borderColor: 'var(--accent)', background: 'rgba(0,212,170,0.08)' }}
+              style={{ color: 'var(--accent-text)', borderColor: 'var(--border)', background: 'var(--bg-active)' }}
             >
               {activeSlide.name}
             </span>
@@ -125,8 +125,8 @@ const SessionDropletTable: React.FC = () => {
       {/* ── Stats strip ─── */}
       <div className="grid grid-cols-4 border-b" style={{ borderColor: 'var(--separator)' }}>
         <StatCell label="Total" value={total} color="var(--text1)" />
-        <StatCell label="AI" value={aiCount} color="var(--accent-text)" dimBg="rgba(0,212,170,0.06)" sep />
-        <StatCell label="Manual" value={manualCount} color="var(--mac-orange)" dimBg="rgba(251,146,60,0.06)" sep />
+        <StatCell label="AI" value={aiCount} color="var(--accent-text)" dimBg="var(--bg-active)" sep />
+        <StatCell label="Manual" value={manualCount} color="var(--mac-orange)" dimBg="rgba(249,115,22,0.06)" sep />
         <StatCell label="Slide" value={slideCount} color="var(--mac-teal)" dimBg="rgba(20,184,166,0.06)" sep />
       </div>
 
@@ -141,7 +141,8 @@ const SessionDropletTable: React.FC = () => {
               const pct = binCounts[i] / maxBin;
               return (
                 <div key={b.label} className="flex flex-col items-center flex-1 gap-0.5 group" title={`${b.label} µm: ${binCounts[i]}`}>
-                  <div className="w-full rounded-t-none" style={{
+                  <div style={{
+                    width: '100%',
                     height: `${Math.max(2, pct * 100)}%`,
                     background: pct > 0 ? b.color : 'var(--border)',
                     opacity: pct > 0 ? 0.85 : 0.3,
