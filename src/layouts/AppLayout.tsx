@@ -4,7 +4,7 @@ import TopDashboard from '../components/dashboard/TopDashboard';
 import Workspace from '../components/workspace/Workspace';
 import SettingsWindow from '../components/SettingsWindow';
 import { useAppStore } from '../store/useAppStore';
-import { ChevronDown, FileCode, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X, Cloud, CloudOff, AlertCircle } from 'lucide-react';
+import { ChevronDown, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X, Cloud, CloudOff, AlertCircle } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AUTO_SAVE_INTERVAL } from '../store/useAppStore';
@@ -334,7 +334,14 @@ const AppLayout: React.FC = () => {
             className="w-[18px] h-[18px] flex items-center justify-center rounded"
             style={{ background: 'var(--accent)' }}
           >
-            <FileCode size={11} color="white" strokeWidth={2.5} />
+            <svg width="12" height="12" viewBox="0 0 512 512" fill="none">
+              <circle cx="248" cy="252" r="136" stroke="white" strokeWidth="28" opacity="0.9"/>
+              <circle cx="280" cy="270" r="32" fill="white" opacity="0.8"/>
+              <circle cx="196" cy="210" r="24" fill="white" opacity="0.7"/>
+              <circle cx="200" cy="310" r="16" fill="white" opacity="0.6"/>
+              <circle cx="310" cy="200" r="14" fill="white" opacity="0.55"/>
+              <line x1="348" y1="358" x2="420" y2="430" stroke="white" strokeWidth="28" strokeLinecap="round" opacity="0.7"/>
+            </svg>
           </div>
           <span className="text-[13px] font-semibold" style={{ color: 'var(--text1)' }}>
             DropDetect

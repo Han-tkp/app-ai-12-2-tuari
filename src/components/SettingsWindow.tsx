@@ -19,6 +19,7 @@ const SettingsWindow: React.FC = () => {
     hotkeySnapshot, setHotkeySnapshot,
     hardwareProfile, profileOverride, ramGb, cpuCores, inferenceSkip,
     setProfileOverride, isAIRunning,
+    snapshotDisplayDuration, setSnapshotDisplayDuration,
   } = useAppStore();
 
   const [hasChanges, setHasChanges] = useState(false);
@@ -211,9 +212,16 @@ const SettingsWindow: React.FC = () => {
                           <span className="text-[12px] font-bold text-[var(--text1)] font-mono min-w-[30px] text-right">{(aiConfidence * 100).toFixed(0)}%</span>
                         </div>
                       </div>
+                      <div className="space-y-2 col-span-2">
+                        <label className="text-[9px] font-bold text-[var(--text4)] uppercase tracking-wider">Snapshot Freeze Duration</label>
+                        <div className="flex items-center gap-3">
+                          <input type="range" min="0.5" max="5" step="0.5" value={snapshotDisplayDuration} onChange={(e) => setSnapshotDisplayDuration(parseFloat(e.target.value))} className="zoom-input flex-1 h-[3px]" />
+                          <span className="text-[12px] font-bold text-[var(--text1)] font-mono min-w-[30px] text-right">{snapshotDisplayDuration}s</span>
+                        </div>
+                      </div>
                       <div className="space-y-2">
                         <label className="text-[9px] font-bold text-[var(--text4)] uppercase tracking-widest px-1">Snapshot Key</label>
-                        <button 
+                        <button
                           onClick={() => setRecordingHotkey('snapshot')}
                           className={`w-full h-9 rounded-lg border text-[12px] font-black tracking-widest transition-all ${recordingHotkey === 'snapshot' ? 'bg-[var(--mac-orange)] text-white border-[var(--mac-orange)] animate-pulse' : 'bg-[var(--bg-input)] text-[var(--accent-text)] border-[var(--border-strong)] hover:border-[var(--accent)]'}`}
                         >
@@ -222,7 +230,7 @@ const SettingsWindow: React.FC = () => {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[9px] font-bold text-[var(--text4)] uppercase tracking-widest px-1">Live AI Key</label>
-                        <button 
+                        <button
                           onClick={() => setRecordingHotkey('live')}
                           className={`w-full h-9 rounded-lg border text-[12px] font-black tracking-widest transition-all ${recordingHotkey === 'live' ? 'bg-[var(--mac-orange)] text-white border-[var(--mac-orange)] animate-pulse' : 'bg-[var(--bg-input)] text-[var(--accent-text)] border-[var(--border-strong)] hover:border-[var(--accent)]'}`}
                         >

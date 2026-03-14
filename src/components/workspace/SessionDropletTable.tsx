@@ -29,6 +29,7 @@ const SessionDropletTable: React.FC = () => {
     sessionTablePosition, setSessionTablePosition,
     activeSlideId, slides,
     removeSessionDroplet,
+    snapshotSourceFilter, setSnapshotSourceFilter,
   } = useAppStore();
 
   const { onMouseDown } = useDraggable(sessionTablePosition, setSessionTablePosition);
@@ -48,14 +49,20 @@ const SessionDropletTable: React.FC = () => {
       }))
     : currentSessionDroplets;
 
+  // Source filter
+  const filteredData = snapshotSourceFilter === 'all'
+    ? displayData
+    : displayData.filter(d => d.source.toLowerCase() === snapshotSourceFilter);
+
   const aiCount      = displayData.filter(d => d.source === 'AI').length;
   const manualCount  = displayData.filter(d => d.source === 'Manual').length;
   const slideCount   = displayData.filter(d => d.source === 'Slide').length;
-  const inRangeCount = displayData.filter(d => isWhoCompliant(d.diameter)).length;
-  const total        = displayData.length;
+  const inRangeCount = filteredData.filter(d => isWhoCompliant(d.diameter)).length;
+  const total        = filteredData.length;
+  const totalAll     = displayData.length;
 
-  // WHO Compliance: Pass if VMD 10-30 and SPAN ≤ 2.0
-  const vmd = total > 0 
+  // WHO Compliance: Pass if VMD 10-30 and SPAN ≤ 2.0 (based on all data, not filtered)
+  const vmd = totalAll > 0
     ? (() => {
         const sorted = [...displayData.map(d => d.diameter)].sort((a, b) => a - b);
         const vols = sorted.map(d => (Math.PI / 6) * Math.pow(d, 3));
@@ -69,13 +76,13 @@ const SessionDropletTable: React.FC = () => {
       })()
     : 0;
   
-  const sessionWhoPass = total >= 10 && vmd >= WHO_MIN && vmd <= WHO_MAX;
+  const sessionWhoPass = totalAll >= 10 && vmd >= WHO_MIN && vmd <= WHO_MAX;
   const sessionWhoColor = sessionWhoPass ? 'var(--mac-green)' : 'var(--mac-orange)';
   const sessionWhoText = sessionWhoPass ? 'Pass' : 'Review';
 
   // Compute distribution
   const binCounts = WHO_BINS.map(b =>
-    displayData.filter(d => d.diameter >= b.min && d.diameter < b.max).length
+    filteredData.filter(d => d.diameter >= b.min && d.diameter < b.max).length
   );
   const maxBin = Math.max(1, ...binCounts);
 
@@ -124,10 +131,30 @@ const SessionDropletTable: React.FC = () => {
 
       {/* ── Stats strip ─── */}
       <div className="grid grid-cols-4 border-b" style={{ borderColor: 'var(--separator)' }}>
-        <StatCell label="Total" value={total} color="var(--text1)" />
+        <StatCell label="Total" value={totalAll} color="var(--text1)" />
         <StatCell label="AI" value={aiCount} color="var(--accent-text)" dimBg="var(--bg-active)" sep />
         <StatCell label="Manual" value={manualCount} color="var(--mac-orange)" dimBg="rgba(249,115,22,0.06)" sep />
         <StatCell label="Slide" value={slideCount} color="var(--mac-teal)" dimBg="rgba(20,184,166,0.06)" sep />
+      </div>
+
+      {/* ── Source filter ─── */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b" style={{ borderColor: 'var(--separator)', background: 'var(--bg-surface)' }}>
+        <Filter size={9} style={{ color: 'var(--text4)' }} />
+        <span className="font-instrument text-[8px] uppercase tracking-[0.1em] mr-1" style={{ color: 'var(--text4)' }}>Source:</span>
+        {(['all', 'ai', 'manual'] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setSnapshotSourceFilter(f)}
+            className="font-instrument text-[9px] font-bold px-2 py-0.5 rounded-[3px] transition-all border"
+            style={{
+              background: snapshotSourceFilter === f ? 'var(--bg-active)' : 'transparent',
+              borderColor: snapshotSourceFilter === f ? 'var(--accent)' : 'var(--border)',
+              color: snapshotSourceFilter === f ? 'var(--accent-text)' : 'var(--text3)',
+            }}
+          >
+            {f === 'all' ? `All (${totalAll})` : f === 'ai' ? `AI (${aiCount})` : `Manual (${manualCount})`}
+          </button>
+        ))}
       </div>
 
       {/* ── Size distribution mini-chart ─── */}
@@ -194,7 +221,7 @@ const SessionDropletTable: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              [...displayData].reverse().map((d, idx) => {
+              [...filteredData].reverse().map((d, idx) => {
                 const isOut = !isWhoCompliant(d.diameter);
                 const rowNum = total - idx;
                 return (

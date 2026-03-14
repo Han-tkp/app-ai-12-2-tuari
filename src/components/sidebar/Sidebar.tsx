@@ -4,6 +4,7 @@ import {
   RotateCcw, Play, Square,
   Camera as CameraIcon,
   Plus, Download, ChevronDown, Layers, RefreshCcw, Trash2,
+  MousePointer2, Circle, RectangleHorizontal, Minus, Eraser, Pencil,
 } from 'lucide-react';
 
 function computeSlideStats(droplets: number[]) {
@@ -39,6 +40,9 @@ const Sidebar: React.FC = () => {
     activeSlideId, setActiveSlideId, retakeSlide,
     hotkeyLiveAI, hotkeySnapshot, triggerSave, fetchSessionAndAddToSlide,
     excelLanguage, setExcelLanguage,
+    isManualEditActive, setManualEditActive,
+    activeTool, setActiveTool,
+    clearAnnotations,
   } = useAppStore();
 
   const [isSlideSelectOpen, setSlideSelectOpen] = useState(false);
@@ -169,19 +173,61 @@ const Sidebar: React.FC = () => {
             </SidebarSection>
 
             {/* Data Actions */}
-            <SidebarSection label="Data" last>
+            <SidebarSection label="Data">
+              <button
+                onClick={() => fetchSessionAndAddToSlide()}
+                className="btn-success"
+              >
+                <Plus size={13} />
+                <span>Add Session to Slide</span>
+              </button>
+            </SidebarSection>
+
+            {/* Manual Edit */}
+            <SidebarSection label="Manual Edit" last>
               <div className="space-y-2">
                 <button
-                  onClick={() => fetchSessionAndAddToSlide()}
-                  className="btn-success"
+                  onClick={() => setManualEditActive(!isManualEditActive)}
+                  className={isManualEditActive ? 'btn-danger' : 'btn-secondary'}
                 >
-                  <Plus size={13} />
-                  <span>Add Session to Slide</span>
+                  <Pencil size={13} />
+                  <span>{isManualEditActive ? 'Exit Edit Mode' : 'Enter Edit Mode'}</span>
                 </button>
-                <button onClick={handleExport} className="btn-secondary">
-                  <Download size={13} />
-                  <span>Quick Export Excel</span>
-                </button>
+
+                {isManualEditActive && (
+                  <>
+                    <div className="flex gap-1">
+                      {([
+                        { tool: 'select', icon: <MousePointer2 size={14} />, label: 'Select' },
+                        { tool: 'circle', icon: <Circle size={14} />, label: 'Circle' },
+                        { tool: 'rect', icon: <RectangleHorizontal size={14} />, label: 'Rect' },
+                        { tool: 'line', icon: <Minus size={14} />, label: 'Line' },
+                      ] as const).map(({ tool, icon, label }) => (
+                        <button
+                          key={tool}
+                          onClick={() => setActiveTool(tool)}
+                          className="flex-1 flex flex-col items-center gap-1 py-1.5 rounded-md text-[9px] font-medium transition-colors border"
+                          style={{
+                            background: activeTool === tool ? 'var(--bg-active)' : 'var(--bg-surface)',
+                            borderColor: activeTool === tool ? 'var(--accent)' : 'var(--border)',
+                            color: activeTool === tool ? 'var(--accent-text)' : 'var(--text3)',
+                          }}
+                          title={label}
+                        >
+                          {icon}
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={clearAnnotations}
+                      className="btn-secondary w-full"
+                    >
+                      <Eraser size={13} />
+                      <span>Clear All Annotations</span>
+                    </button>
+                  </>
+                )}
               </div>
             </SidebarSection>
           </>
@@ -241,47 +287,6 @@ const Sidebar: React.FC = () => {
                 </table>
               </div>
 
-              {/* Sorted droplet list for active slide */}
-              {activeSlideId && (() => {
-                const slide = slides.find(s => s.id === activeSlideId);
-                if (!slide || slide.droplets.length === 0) return null;
-                const sorted = [...slide.droplets].sort((a, b) => a - b);
-                return (
-                  <div className="mt-3 rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-                    <div
-                      className="px-3 py-1.5 flex items-center justify-between"
-                      style={{ background: 'var(--bg-surface3)', borderBottom: '1px solid var(--border)' }}
-                    >
-                      <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text3)' }}>{slide.name} — sorted</span>
-                      <span className="text-[9px] font-semibold" style={{ color: 'var(--accent-text)' }}>{sorted.length} drops</span>
-                    </div>
-                    <div className="max-h-[130px] overflow-y-auto custom-scrollbar" style={{ background: 'var(--bg-surface)' }}>
-                      <table className="w-full text-[10.5px]">
-                        <tbody>
-                          {sorted.map((d, idx) => (
-                            <tr key={idx} style={{ borderTop: idx > 0 ? '1px solid var(--separator)' : undefined }}>
-                              <td className="px-3 py-1 font-instrument" style={{ color: 'var(--text4)' }}>{idx + 1}</td>
-                              <td className="px-3 py-1 text-right font-instrument font-semibold" style={{ color: 'var(--accent-text)' }}>
-                                {d.toFixed(1)} µm
-                              </td>
-                              <td className="px-3 py-1 text-right">
-                                <div
-                                  className="inline-block h-1.5 rounded-full"
-                                  style={{
-                                    width: `${Math.min(60, (d / 30) * 60)}px`,
-                                    background: d >= 10 && d <= 30 ? 'var(--accent)' : 'var(--mac-red)',
-                                    opacity: 0.5,
-                                  }}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
             </SidebarSection>
 
             {/* Filter */}
@@ -291,6 +296,7 @@ const Sidebar: React.FC = () => {
                   <span className="text-[9px] font-semibold uppercase" style={{ color: 'var(--text4)', letterSpacing: '0.06em' }}>Min</span>
                   <input
                     type="number"
+                    step="0.01"
                     value={filterMin}
                     onChange={(e) => handleFilterMin(e.target.value)}
                     className="w-full rounded-md px-2.5 py-1.5 text-[12px] font-instrument outline-none transition-colors border"
@@ -303,6 +309,7 @@ const Sidebar: React.FC = () => {
                   <span className="text-[9px] font-semibold uppercase" style={{ color: 'var(--text4)', letterSpacing: '0.06em' }}>Max</span>
                   <input
                     type="number"
+                    step="0.01"
                     value={filterMax}
                     onChange={(e) => handleFilterMax(e.target.value)}
                     className="w-full rounded-md px-2.5 py-1.5 text-[12px] font-instrument outline-none transition-colors border"

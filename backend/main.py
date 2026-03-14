@@ -70,15 +70,15 @@ class LanguageConfig:
             'vmd_chart_y': 'VMD (µm)',
             'vmd_chart_x': 'สไลด์',
             # Per-slide sheet
-            'droplet_data': 'ข้อมูลละออง (เรียงตามขนาด)',
+            'droplet_data': 'ข้อมูลละออง',
             'who_status_short': 'สถานะ WHO',
             'in_range': 'ในช่วง',
-            'hash': '#',
-            'diameter': 'ขนาด (µm)',
-            'who_range': 'ช่วง WHO',
-            'volume': 'ปริมาตร (µm³)',
-            'spread_factor': 'Spread Factor',
-            'cumulative_pct': 'สะสม (%)',
+            'col_droplet_no': 'ละอองที่',
+            'col_observed_diameter': 'เส้นผ่านศูนย์กลางที่สำรวจได้',
+            'col_actual_diameter': 'เส้นผ่านศูนย์กลางจริง',
+            'col_volume': 'ปริมาตรที่คำนวณ',
+            'col_cumulative_volume': 'ผลรวมสะสมของปริมาตร',
+            'col_volume_pct': '% ของปริมาตรในแต่ละชั้น',
             'yes': 'ใช่',
             'no': 'ไม่',
             'size_distribution': 'การกระจายขนาดละออง',
@@ -114,15 +114,15 @@ class LanguageConfig:
             'vmd_chart_y': 'VMD (µm)',
             'vmd_chart_x': 'Slide',
             # Per-slide sheet
-            'droplet_data': 'Droplet Data (Sorted by Size)',
+            'droplet_data': 'Droplet Data',
             'who_status_short': 'WHO Status',
             'in_range': 'In Range',
-            'hash': '#',
-            'diameter': 'Diameter (µm)',
-            'who_range': 'WHO Range',
-            'volume': 'Volume (µm³)',
-            'spread_factor': 'Spread Factor',
-            'cumulative_pct': 'Cumulative %',
+            'col_droplet_no': 'Droplet #',
+            'col_observed_diameter': 'Observed Diameter',
+            'col_actual_diameter': 'Actual Diameter',
+            'col_volume': 'Calculated Volume',
+            'col_cumulative_volume': 'Cumulative Volume',
+            'col_volume_pct': 'Volume %',
             'yes': 'Yes',
             'no': 'No',
             'size_distribution': 'Droplet Size Distribution',
@@ -440,9 +440,16 @@ def _build_excel(req: "SaveProjectRequest", excel_path: str, lang='th'):
         ws2.cell(row=3, column=3, value=L.get('in_range')).font = Font(bold=True, size=10)
         ws2.cell(row=3, column=4, value=round(in_range_pct / 100, 3)).number_format = "0.0%"
 
-        # Raw data header
+        # Raw data header — new column structure
         hdr_row = 5
-        headers = [L.get('hash'), L.get('diameter'), L.get('who_range'), L.get('volume'), L.get('spread_factor'), L.get('cumulative_pct')]
+        headers = [
+            L.get('col_droplet_no'),
+            L.get('col_observed_diameter'),
+            L.get('col_actual_diameter'),
+            L.get('col_volume'),
+            L.get('col_cumulative_volume'),
+            L.get('col_volume_pct'),
+        ]
         for ci, txt in enumerate(headers, 1):
             c = ws2.cell(row=hdr_row, column=ci, value=txt)
             c.font = Font(bold=True, size=10)
@@ -450,35 +457,39 @@ def _build_excel(req: "SaveProjectRequest", excel_path: str, lang='th'):
             c.border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
         ws2.row_dimensions[hdr_row].height = 20
 
+        # Compute all volumes first for total
+        actual_diams = [d / 1.15 for d in diams]
+        volumes = [((4/3) * (22/7) * ((ad / 2) ** 3)) / 1e3 for ad in actual_diams]
+        total_volume = sum(volumes)
+
         # Data rows (sorted small to large)
-        cum_count = 0
-        for i, d in enumerate(diams, 1):
-            cum_count += 1
-            vol = (np.pi / 6) * (d ** 3)
-            sf = 0.86 if d > 20 else 0.80 if d >= 15 else 0.75 if d >= 10 else 0.70
-            in_range_flag = 10.0 <= d <= 30.0
-            cum_pct = (cum_count / len(diams) * 100)
-            row_num = hdr_row + i
-            
-            ws2.cell(row=row_num, column=1, value=i)
+        cum_vol = 0.0
+        for i, d in enumerate(diams):
+            actual_d = actual_diams[i]
+            vol = volumes[i]
+            cum_vol += vol
+            vol_pct = (cum_vol * 100 / total_volume) if total_volume > 0 else 0
+            row_num = hdr_row + i + 1
+
+            ws2.cell(row=row_num, column=1, value=i + 1)
             ws2.cell(row=row_num, column=2, value=round(d, 3)).number_format = "0.000"
-            ws2.cell(row=row_num, column=3, value=L.get('yes') if in_range_flag else L.get('no')).font = Font(color="008000" if in_range_flag else "FF0000")
-            ws2.cell(row=row_num, column=4, value=round(vol, 1)).number_format = "0.0"
-            ws2.cell(row=row_num, column=5, value=sf).number_format = "0.00"
-            ws2.cell(row=row_num, column=6, value=round(cum_pct, 1)).number_format = "0.0%"
-            
+            ws2.cell(row=row_num, column=3, value=round(actual_d, 3)).number_format = "0.000"
+            ws2.cell(row=row_num, column=4, value=round(vol, 4)).number_format = "0.0000"
+            ws2.cell(row=row_num, column=5, value=round(cum_vol, 4)).number_format = "0.0000"
+            ws2.cell(row=row_num, column=6, value=round(vol_pct, 2)).number_format = "0.00"
+
             for ci in range(1, 7):
                 cell = ws2.cell(row=row_num, column=ci)
                 cell.border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
             ws2.row_dimensions[row_num].height = 16
 
         # Column widths
-        ws2.column_dimensions["A"].width = 6
-        ws2.column_dimensions["B"].width = 14
-        ws2.column_dimensions["C"].width = 12
-        ws2.column_dimensions["D"].width = 14
-        ws2.column_dimensions["E"].width = 14
-        ws2.column_dimensions["F"].width = 12
+        ws2.column_dimensions["A"].width = 10
+        ws2.column_dimensions["B"].width = 26
+        ws2.column_dimensions["C"].width = 22
+        ws2.column_dimensions["D"].width = 18
+        ws2.column_dimensions["E"].width = 22
+        ws2.column_dimensions["F"].width = 22
 
         # Add distribution chart
         bins = {"<10": 0, "10-15": 0, "15-20": 0, "20-25": 0, "25-30": 0, ">30": 0}

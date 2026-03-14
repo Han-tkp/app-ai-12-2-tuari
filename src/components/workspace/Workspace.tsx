@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import AnnotationLayer from './AnnotationLayer';
 import SessionDropletTable from './SessionDropletTable';
 import { WS_STREAM } from '../../config';
-import {
-  MousePointer2, Circle, Square as RectIcon, Minus, Trash2, Edit3, Box,
-} from 'lucide-react';
+import { Box } from 'lucide-react';
 
 const Workspace: React.FC = () => {
   const {
@@ -15,14 +13,15 @@ const Workspace: React.FC = () => {
     setHardwareInfo,
     currentSessionDroplets, isSessionTablePoppedOut, setSessionTablePoppedOut,
     activeSlideId, setActiveSlideId, slides,
-    isManualEditActive, setManualEditActive,
-    activeTool, setActiveTool, clearAnnotations,
   } = useAppStore();
 
   const [zoom, setZoom] = useState(100);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [isSlideMenuOpen, setSlideMenuOpen] = useState(false);
+  const [snapshotFreeze, setSnapshotFreeze] = useState<{ src: string; count: number } | null>(null);
   const ws = useRef<WebSocket | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const CANVAS_WIDTH = 1280;
   const CANVAS_HEIGHT = 720;
@@ -50,7 +49,18 @@ const Workspace: React.FC = () => {
             inference_skip: data.inference_skip,
           });
         } else if (data.image) {
-          setImageSrc(`data:image/jpeg;base64,${data.image}`);
+          const src = `data:image/jpeg;base64,${data.image}`;
+
+          if (data.is_snapshot) {
+            // Freeze frame for snapshot
+            if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current);
+            const duration = useAppStore.getState().snapshotDisplayDuration;
+            setSnapshotFreeze({ src, count: data.count ?? 0 });
+            snapshotTimerRef.current = setTimeout(() => setSnapshotFreeze(null), duration * 1000);
+          } else if (!snapshotFreeze) {
+            setImageSrc(src);
+          }
+
           if (data.vmd !== undefined) {
             updateStats(data.vmd, data.span, data.count, data.out_of_bounds, data.ram, data.session_droplets || []);
           }
@@ -94,17 +104,27 @@ const Workspace: React.FC = () => {
     }
   }, [cameraIndex, isCameraRunning]);
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
     const zoomStep = 5;
     if (e.deltaY < 0) setZoom(prev => Math.min(400, prev + zoomStep));
     else setZoom(prev => Math.max(50, prev - zoomStep));
-  };
+  }, []);
+
+  // Attach wheel listener to viewport with passive:false so we can preventDefault
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   const activeSlide = slides.find(s => s.id === activeSlideId);
   const slideIndex = slides.findIndex(s => s.id === activeSlideId);
 
   return (
-    <div className="w-full h-full flex flex-col transition-colors relative" onWheel={handleWheel}>
+    <div className="w-full h-full flex flex-col transition-colors relative">
 
       {/* ── Workspace Navbar ─────────────────────────────────────────── */}
       <div
@@ -176,32 +196,6 @@ const Workspace: React.FC = () => {
           <span className="font-mono">{currentSessionDroplets.length}</span>
         </button>
 
-        <div className="w-px h-4 bg-[var(--separator)] mx-0.5 shrink-0" />
-
-        {/* ── Manual edit toggle ── */}
-        <button
-          onClick={() => setManualEditActive(!isManualEditActive)}
-          className={`h-6 w-6 flex items-center justify-center rounded-md transition-all border shrink-0 ${
-            isManualEditActive
-              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-              : 'bg-[var(--bg-surface2)] text-[var(--text3)] border-[var(--border)] hover:bg-[var(--bg-surface3)]'
-          }`}
-          title="Manual Edit"
-        >
-          <Edit3 size={11} />
-        </button>
-
-        {/* ── Manual edit tools (shown only when active) ── */}
-        {isManualEditActive && (
-          <div className="flex items-center gap-0.5 shrink-0">
-            <NavTool active={activeTool === 'select'} onClick={() => setActiveTool('select')} icon={<MousePointer2 size={10} />} title="Select" />
-            <NavTool active={activeTool === 'circle'} onClick={() => setActiveTool('circle')} icon={<Circle size={10} />} title="Circle" />
-            <NavTool active={activeTool === 'rect'} onClick={() => setActiveTool('rect')} icon={<RectIcon size={10} />} title="Rectangle" />
-            <NavTool active={activeTool === 'line'} onClick={() => setActiveTool('line')} icon={<Minus size={10} />} title="Line" />
-            <NavTool onClick={clearAnnotations} icon={<Trash2 size={10} />} title="Clear All" danger />
-          </div>
-        )}
-
         {/* CAM badge ── far right */}
         <div
           className="text-[10px] font-bold uppercase tracking-widest bg-[var(--bg-surface2)] border border-[var(--border)] px-2 py-0.5 rounded-[5px] ml-auto shrink-0"
@@ -212,7 +206,7 @@ const Workspace: React.FC = () => {
       </div>
 
       {/* ── Viewport ─────────────────────────────────────────────────── */}
-      <div className="flex-1 relative overflow-hidden flex items-center justify-center p-4">
+      <div ref={viewportRef} className="flex-1 relative overflow-hidden flex items-center justify-center p-4">
         <div className="absolute inset-0 vp-grid-black" />
         <div
           className="relative bg-black border shadow-2xl transition-transform duration-200 overflow-hidden"
@@ -225,16 +219,30 @@ const Workspace: React.FC = () => {
             borderColor: 'var(--border)',
           }}
         >
-          {imageSrc && (
+          {(snapshotFreeze ? snapshotFreeze.src : imageSrc) && (
             <img
-              src={imageSrc}
+              src={snapshotFreeze ? snapshotFreeze.src : imageSrc!}
               alt="Camera Stream"
               className="absolute inset-0 w-full h-full object-contain select-none"
               draggable={false}
             />
           )}
           <AnnotationLayer width={CANVAS_WIDTH} height={CANVAS_HEIGHT} scale={1} />
-          {(!isCameraRunning || !imageSrc) && (
+
+          {/* Snapshot freeze overlay */}
+          {snapshotFreeze && (
+            <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-lg pointer-events-none"
+              style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid var(--accent)' }}
+            >
+              <div className="w-2 h-2 rounded-full bg-[var(--mac-red)] animate-pulse" />
+              <span className="text-[11px] font-bold text-white">SNAPSHOT</span>
+              <span className="text-[13px] font-instrument font-bold" style={{ color: 'var(--accent-text)' }}>
+                {snapshotFreeze.count} detected
+              </span>
+            </div>
+          )}
+
+          {(!isCameraRunning || (!imageSrc && !snapshotFreeze)) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none">
               <svg viewBox="0 0 40 40" className="w-10 h-10" fill="none" stroke="var(--text4)" strokeWidth="1.5">
                 <rect x="4" y="4" width="32" height="26" rx="3" />
@@ -277,28 +285,6 @@ const Workspace: React.FC = () => {
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-const NavTool: React.FC<{
-  active?: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  title?: string;
-  danger?: boolean;
-}> = ({ active, onClick, icon, title, danger }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    className={`h-6 w-6 flex items-center justify-center rounded-md transition-all ${
-      active
-        ? 'bg-[var(--accent)] text-white'
-        : danger
-        ? 'text-[var(--mac-red)] hover:bg-[var(--mac-red)]/10'
-        : 'text-[var(--text3)] hover:bg-[var(--bg-surface3)] hover:text-[var(--text1)]'
-    }`}
-  >
-    {icon}
-  </button>
-);
 
 const PROFILE_COLORS: Record<string, string> = {
   low: 'var(--mac-orange)',

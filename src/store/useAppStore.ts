@@ -111,6 +111,8 @@ interface AppState {
   lineThickness: number;
   fillOpacity: number;
   annotationColor: string;
+  snapshotDisplayDuration: number; // seconds to freeze snapshot frame
+  snapshotSourceFilter: 'all' | 'ai' | 'manual'; // SessionDropletTable filter
 
   // Actions
   setProjectName: (name: string) => void;
@@ -175,6 +177,8 @@ interface AppState {
 
   // UI Actions
   updateAnnotationSettings: (updates: Partial<Pick<AppState, 'lineThickness' | 'fillOpacity' | 'annotationColor'>>) => void;
+  setSnapshotDisplayDuration: (duration: number) => void;
+  setSnapshotSourceFilter: (filter: 'all' | 'ai' | 'manual') => void;
 }
 
 const initialSlides: Slide[] = [
@@ -244,6 +248,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   lineThickness: 2,
   fillOpacity: 0.2,
   annotationColor: '#00FF00',
+  snapshotDisplayDuration: 1.5,
+  snapshotSourceFilter: 'all',
 
   setProjectName: (projectName) => { set({ projectName, isDirty: true }); },
   setMode: (mode) => set({ mode }),
@@ -591,4 +597,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateAnnotationSettings: (updates) => set((state) => ({ ...state, ...updates })),
+  setSnapshotDisplayDuration: (snapshotDisplayDuration) => set({ snapshotDisplayDuration }),
+  setSnapshotSourceFilter: (snapshotSourceFilter) => set({ snapshotSourceFilter }),
 }));
