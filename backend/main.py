@@ -176,19 +176,26 @@ DEFAULT_LANG = LanguageConfig('th')
 
 
 def open_camera(idx: int) -> cv2.VideoCapture | None:
-    cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
-    if not cap.isOpened():
-        logger.error("Camera %d failed to open", idx)
+    backends = [
+        ("DirectShow", cv2.CAP_DSHOW),
+        ("MSMF", cv2.CAP_MSMF),
+        ("Default", None),
+    ]
+    for name, backend in backends:
+        cap = cv2.VideoCapture(idx, backend) if backend is not None else cv2.VideoCapture(idx)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            actual_fps = cap.get(cv2.CAP_PROP_FPS)
+            logger.info("Camera %d opened via %s: %dx%d @ %.0f FPS", idx, name, actual_w, actual_h, actual_fps)
+            return cap
         cap.release()
-        return None
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_FPS, 30)
-    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    actual_fps = cap.get(cv2.CAP_PROP_FPS)
-    logger.info("Camera %d opened: %dx%d @ %.0f FPS", idx, actual_w, actual_h, actual_fps)
-    return cap
+        logger.warning("Camera %d failed to open via %s", idx, name)
+    logger.error("Camera %d failed to open with all backends", idx)
+    return None
 
 
 def detect_profile() -> str:
@@ -258,6 +265,10 @@ class DropletSystem:
         if os.path.exists(model_path):
             self.session = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
             self.input_name = self.session.get_inputs()[0].name
+            logger.info("Loaded ONNX model: %s", model_path)
+        else:
+            logger.error("ONNX model NOT FOUND: %s (BASE_DIR=%s)", model_path, BASE_DIR)
+            self.session = None
         if os.path.exists(json_path):
             with open(json_path, 'r') as f:
                 data = json.load(f)
@@ -595,8 +606,8 @@ async def cleanup_autosave(project_name: str):
     safe_name = re_mod.sub(r'[*?\[\]/\\]', '_', project_name)
 
     try:
-        docs = Path.home() / "Documents" / "DropDetect_Projects"
-        autosave_dir = docs / ".autosave"
+        docs = Path.home() / "Documents" / "DropDetect_Workspace"
+        autosave_dir = docs / "AutoSave"
 
         if autosave_dir.exists():
             # Delete autosave files older than 7 days
@@ -1389,7 +1400,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if static_frame_processed:
                     static_frame_processed = False
                     # Wait until user triggers another action (snapshot, re-toggle AI, or video play)
-                    while ws_alive and not camera_active and not system.pending_snapshot and not video_playing:
+                    while ws_alive and not camera_active and not system.pending_snapshot and not video_playing and not system.is_ai_active:
                         await asyncio.sleep(0.2)
                     continue
             except (WebSocketDisconnect, RuntimeError):

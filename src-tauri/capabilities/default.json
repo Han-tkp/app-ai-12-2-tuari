@@ -12,6 +12,7 @@
     "core:window:allow-close",
     "core:path:default",
     "fs:default",
+    "fs:allow-read-file",
     "process:default",
     {
       "identifier": "fs:allow-document-read-recursive",
@@ -28,6 +29,7 @@
     "fs:allow-mkdir",
     "fs:allow-exists",
     "dialog:allow-open",
+    "dialog:allow-save",
     "dialog:allow-message",
     "dialog:allow-confirm",
     "dialog:allow-ask"

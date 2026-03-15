@@ -48,9 +48,11 @@ const Workspace: React.FC = () => {
     toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   }, []);
 
-  // Always-on WebSocket — connects on mount, reconnects automatically
+  // Always-on WebSocket — connects on mount, reconnects with backoff
   useEffect(() => {
     let cancelled = false;
+    let retryDelay = 2000;
+    const MAX_RETRY_DELAY = 30000;
 
     const connect = () => {
       if (cancelled) return;
@@ -60,6 +62,7 @@ const Workspace: React.FC = () => {
       socket.onopen = () => {
         if (cancelled) { socket.close(); return; }
         console.log('[WS] Connected');
+        retryDelay = 2000; // Reset backoff on successful connect
         const state = useAppStore.getState();
         // Sync current state to backend (lightweight, no side effects)
         socket.send(JSON.stringify({ action: 'set_ai_active', active: state.isAIRunning }));
@@ -223,12 +226,12 @@ const Workspace: React.FC = () => {
 
       socket.onclose = () => {
         if (cancelled) return;
-        console.log('[WS] Disconnected, reconnecting in 2s...');
-        reconnectTimerRef.current = setTimeout(connect, 2000);
+        console.log(`[WS] Disconnected, reconnecting in ${retryDelay / 1000}s...`);
+        reconnectTimerRef.current = setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 1.5, MAX_RETRY_DELAY);
       };
 
-      socket.onerror = (err) => {
-        console.warn('[WS] Error:', err);
+      socket.onerror = () => {
         socket.close();
       };
     };

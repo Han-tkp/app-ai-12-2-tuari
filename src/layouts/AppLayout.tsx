@@ -132,7 +132,6 @@ const AppLayout: React.FC = () => {
 
   const handleNewProject = () => {
     setFileMenuOpen(false);
-    setShowStartScreen(false);
     setModalInput('Untitled Project');
     setModalType('new');
   };
@@ -274,6 +273,7 @@ const AppLayout: React.FC = () => {
                 onClick={() => {
                   useAppStore.getState().confirmAutoSaveRecovery();
                   setShowRecoverDialog(false);
+                  setShowStartScreen(false);
                 }}
                 className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
                 style={{ background: 'var(--accent)', color: '#fff' }}

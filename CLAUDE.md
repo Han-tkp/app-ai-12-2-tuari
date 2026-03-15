@@ -44,14 +44,21 @@ The frontend and backend communicate exclusively via **WebSocket at `ws://localh
 - **Python → React:** Camera frames captured at ~30 FPS → AI inference → supervision annotation → Base64-encoded JPEG frame → sent to frontend → rendered on canvas.
 - **React → Python:** Commands sent as JSON messages over the same WebSocket (e.g., `switch_camera`, `set_lens`, `take_snapshot`, `export_excel`, `update_manual_data`).
 
-There is no REST API for real-time operations; only `/api/save-project` is a REST endpoint.
+There is no REST API for real-time operations; only `/api/save-project` and `/api/load-project` are REST endpoints.
+
+### App Flow
+
+1. App opens → **Start Screen** (`StartScreen.tsx`): Quick Actions (New Camera / Import Media / Open .drop) + Recent Projects list.
+2. User creates/opens a project → enters **Workspace** (camera viewport + sidebar + dashboard).
+3. User can return to Start Screen via **File > Start Screen** at any time.
 
 ### Frontend Structure
 
 - `src/config.ts` — **Single source for backend URLs**: `API_BASE` and `WS_STREAM`. Change here to point to a different backend.
-- `src/store/useAppStore.ts` — **Single source of truth** (Zustand). All app state lives here: camera state, AI stats, annotations, slides, settings, hotkeys.
+- `src/store/useAppStore.ts` — **Single source of truth** (Zustand). All app state lives here: camera state, AI stats, annotations, slides, settings, hotkeys. Settings are persisted to localStorage via `LS_KEYS`.
 - `src/hooks/useDraggable.ts` — Shared draggable-panel hook used by `ManualEditTable` and `SessionDropletTable`.
-- `src/layouts/AppLayout.tsx` — Root shell. Handles titlebar (custom frameless window), hotkeys, file menu (New/Open/Save project as `.drop` zip files).
+- `src/layouts/AppLayout.tsx` — Root shell. Manages Start Screen ↔ Workspace transition, titlebar (custom frameless window), hotkeys, file menu, exit confirmation, auto-save recovery.
+- `src/components/StartScreen.tsx` — Welcome dashboard with Quick Actions, New Project dialog (name + lens selection), and Recent Projects (stored in localStorage, max 10).
 - `src/components/sidebar/Sidebar.tsx` — Left panel with Analyze/Report tabs and all controls.
 - `src/components/dashboard/TopDashboard.tsx` — Real-time metrics strip (VMD, Span, count, etc.).
 - `src/components/workspace/Workspace.tsx` — Camera viewport, zoom/pan, WebSocket connection manager.
@@ -59,7 +66,7 @@ There is no REST API for real-time operations; only `/api/save-project` is a RES
 - `src/components/workspace/ManualEditTable.tsx` — Draggable/pop-out table for manual droplet annotations.
 - `src/components/workspace/SessionDropletTable.tsx` — Unified AI + manual droplet session table.
 - `src/components/SettingsWindow.tsx` — Draggable settings panel.
-- `src/utils/fsUtils.ts` — Tauri FS helper: resolves `Documents/DropDetect_Projects/` as the safe workspace directory. Used as the fallback save path when `exportPath` is empty.
+- `src/utils/fsUtils.ts` — Tauri FS helper: resolves `Documents/DropDetect_Workspace/` as the safe workspace directory with sub-folders (Projects, AutoSave, Exports, Media, Logs).
 
 ### Backend (`backend/main.py`)
 
@@ -79,13 +86,18 @@ Calibration JSON files are in `resources/` (`4x.json`, `10x.json`). The backend 
 
 ### Tauri / Rust (`src-tauri/`)
 
-Minimal Rust layer. The main role is window management (frameless, transparent, maximized) and exposing plugins. Permissions are defined in `src-tauri/capabilities/default.json`. The window is configured as decorations-less and transparent in `tauri.conf.json`.
+Minimal Rust layer. The main role is window management (frameless, transparent, maximized) and exposing plugins. Permissions are scoped to `$DOCUMENT/DropDetect_Workspace/**` in `src-tauri/capabilities/default.json`. CSP is configured in `tauri.conf.json`.
+
+### Download Website (`website/`)
+
+Separate Vite + React + TypeScript + Tailwind CSS app for the public download page. Deployed to **Cloudflare Pages** via `wrangler`. Fetches installer links from GitHub Releases API. CI/CD workflow: `.github/workflows/deploy-website.yml`.
 
 ### Styling
 
 - **Tailwind CSS v4** with no `tailwind.config.js`. All theme tokens are CSS variables defined in `src/index.css` under `@theme` and `@layer base`.
 - Use `var(--bg-window)`, `var(--accent)`, `var(--text1)`, etc. for all colors — not hardcoded Tailwind color classes.
-- Dark mode is toggled by adding the `.dark` class to the root element.
+- Three themes: `light` (default), `dark`, `warm`. Toggled by adding the class to `document.documentElement`.
+- Default shell style: `windows`. Affects titlebar chrome (window buttons).
 
 ---
 
@@ -96,3 +108,8 @@ Minimal Rust layer. The main role is window management (frameless, transparent, 
 - **Project files** use the `.drop` extension (a ZIP containing JSON + Excel).
 - **NumPy types** must be cast to Python native types (`float()`, `int()`) before serializing to JSON in the backend.
 - The Zustand store's `triggerSave` action fires a save event that `AppLayout` listens to for file system operations via Tauri FS plugin.
+- **Settings persistence**: Theme, shell, export path, AI confidence, lens, filters, zoom, language, annotation fade delay are all stored in localStorage under `dd-*` keys and restored on app start.
+- **Auto-save** runs every 30 seconds when `isDirty` is true. Recovery dialog shown on next launch if auto-save exists (max age: 7 days).
+- **Recent Projects** stored in localStorage under `dd-recent-projects` (max 10 entries). Managed by `StartScreen.tsx` helpers.
+- **syncManualAnnotations** is debounced at 150ms (module-level timer in `useAppStore.ts`) to avoid flooding the backend.
+- **Backend thread safety**: ONNX inference dispatched to `ThreadPoolExecutor` with local variable capture. `calculate_stats` and frame loop snapshot `droplet_data` dict before iteration. `_build_excel` runs in executor to avoid blocking the event loop.

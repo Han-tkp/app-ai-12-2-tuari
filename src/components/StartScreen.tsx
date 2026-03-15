@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, ImagePlus, FolderOpen, Clock, Droplet, Settings, ChevronRight, Trash2, FileText } from 'lucide-react';
+import { Camera, ImagePlus, FolderOpen, Clock, Droplet, Settings, ChevronRight, Trash2, FileText, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { open } from '@tauri-apps/plugin-dialog';
 import { API_BASE } from '../config';
@@ -155,6 +155,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
   const { newProject, loadProjectData, setObjectiveLens, setImportedMediaPath } = useAppStore();
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [dialogType, setDialogType] = useState<'camera' | 'media' | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setRecentProjects(getRecentProjects());
@@ -204,10 +205,13 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
           });
           setRecentProjects(getRecentProjects());
           onEnterWorkspace();
+        } else {
+          setErrorMsg('Failed to load project file. Check that the backend is running.');
         }
       }
     } catch (err) {
       console.error('Open project error:', err);
+      setErrorMsg('Cannot connect to backend. Please start the Python backend first (cd backend && python main.py).');
     }
   };
 
@@ -224,9 +228,9 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
         removeRecentProject(project.path);
         setRecentProjects(getRecentProjects());
       }
-    } catch {
-      removeRecentProject(project.path);
-      setRecentProjects(getRecentProjects());
+    } catch (err) {
+      console.error('Open recent error:', err);
+      setErrorMsg('Cannot connect to backend. Please start the Python backend first.');
     }
   };
 
@@ -295,7 +299,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
 
         {/* Version */}
         <div className="px-5 py-4 text-[10px]" style={{ color: 'var(--text4)' }}>
-          v2.0.5
+          v2.0.6
         </div>
       </div>
 
@@ -310,6 +314,26 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
             Professional spray droplet analysis per WHO standards
           </p>
         </div>
+
+        {/* ── Error Banner ──────────────────────────────────────────────── */}
+        {errorMsg && (
+          <div
+            className="mb-6 flex items-start gap-3 rounded-xl border px-4 py-3"
+            style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.3)' }}
+          >
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" style={{ color: 'var(--mac-red)' }} />
+            <div className="flex-1">
+              <p className="text-[13px] font-medium" style={{ color: 'var(--mac-red)' }}>{errorMsg}</p>
+            </div>
+            <button
+              onClick={() => setErrorMsg(null)}
+              className="text-[11px] px-2 py-1 rounded-md shrink-0"
+              style={{ background: 'var(--bg-surface2)', color: 'var(--text3)' }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* ── Quick Actions ────────────────────────────────────────────────── */}
         <div className="mb-10">
@@ -391,10 +415,13 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
           ) : (
             <div className="space-y-1.5">
               {recentProjects.map((project) => (
-                <button
+                <div
                   key={project.path}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleOpenRecent(project)}
-                  className="w-full flex items-center gap-4 px-4 py-3 rounded-xl border transition-all hover:shadow-md group"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleOpenRecent(project); }}
+                  className="w-full flex items-center gap-4 px-4 py-3 rounded-xl border transition-all hover:shadow-md group cursor-pointer"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
                 >
                   <div
@@ -412,7 +439,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    {project.slideCount && (
+                    {project.slideCount != null && project.slideCount > 0 && (
                       <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-surface2)', color: 'var(--text3)' }}>
                         {project.slideCount} slides
                       </span>
@@ -429,7 +456,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
                     </button>
                     <ChevronRight size={14} style={{ color: 'var(--text4)' }} />
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
