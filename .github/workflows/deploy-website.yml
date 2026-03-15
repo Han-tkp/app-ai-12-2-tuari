@@ -1,4 +1,4 @@
-vname: Deploy Website to Cloudflare Pages
+name: Deploy Website to Cloudflare Pages
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/deploy-website.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
