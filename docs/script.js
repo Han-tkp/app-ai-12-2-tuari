@@ -7,7 +7,7 @@
 
   // ---- Configuration ----
   // Replace OWNER/REPO with your actual GitHub repository path
-  var GITHUB_REPO = "OWNER/REPO";
+  var GITHUB_REPO = "Han-tkp/app-ai-12-2-tuari";
   var GITHUB_API =
     "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
   var GITHUB_RELEASES =
