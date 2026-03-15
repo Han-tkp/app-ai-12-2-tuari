@@ -25,6 +25,7 @@ const AppLayout: React.FC = () => {
 
   const [isFileMenuOpen, setFileMenuOpen] = useState(false);
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   // Modal states for file operations
   const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
@@ -59,8 +60,13 @@ const AppLayout: React.FC = () => {
   useEffect(() => {
     const initWorkspace = async () => {
       try {
-        await initializeSafeWorkspace();
+        const workspacePath = await initializeSafeWorkspace();
         console.log('Safe workspace initialized');
+        // Set default export path on first install (when no path is stored)
+        const store = useAppStore.getState();
+        if (!store.exportPath) {
+          store.setExportPath(workspacePath);
+        }
       } catch (error) {
         console.error('Failed to initialize workspace:', error);
       }
@@ -180,6 +186,19 @@ const AppLayout: React.FC = () => {
   };
 
   const handleExit = () => {
+    const { isDirty } = useAppStore.getState();
+    if (isDirty) {
+      setShowExitDialog(true);
+    } else {
+      appWindow.close();
+    }
+  };
+
+  const confirmExit = async (save: boolean) => {
+    if (save) {
+      await triggerSave();
+    }
+    setShowExitDialog(false);
     appWindow.close();
   };
 
@@ -249,6 +268,54 @@ const AppLayout: React.FC = () => {
                 style={{ background: 'var(--accent)', color: '#fff' }}
               >
                 Recover Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Exit Confirmation Dialog ─────────────────────────────────────────── */}
+      {showExitDialog && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className="w-[420px] rounded-lg border mac-dialog-shadow overflow-hidden animate-in zoom-in-95 duration-200"
+            style={{
+              background: 'var(--bg-surface)',
+              borderColor: 'var(--border-strong)',
+            }}
+          >
+            <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <AlertCircle size={18} style={{ color: 'var(--mac-orange)' }} />
+                <span className="text-[14px] font-semibold">Unsaved Changes</span>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[13px]" style={{ color: 'var(--text2)' }}>
+                You have unsaved changes in <strong>{projectName}</strong>. Do you want to save before closing?
+              </p>
+            </div>
+            <div className="px-5 py-3 flex justify-end gap-2" style={{ background: 'var(--bg-surface2)' }}>
+              <button
+                onClick={() => setShowExitDialog(false)}
+                className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: 'var(--bg-surface3)', color: 'var(--text2)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmExit(false)}
+                className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: 'rgba(255,79,106,0.12)', color: 'var(--mac-red)' }}
+              >
+                Don't Save
+              </button>
+              <button
+                onClick={() => confirmExit(true)}
+                className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                Save & Exit
               </button>
             </div>
           </div>

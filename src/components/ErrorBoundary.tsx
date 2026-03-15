@@ -48,8 +48,9 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleReset = () => {
-    // Clear localStorage and reload
-    localStorage.clear();
+    // Only clear potentially corrupt state — preserve user preferences
+    localStorage.removeItem('dd-current-project');
+    localStorage.removeItem('dd-autosave-data');
     this.setState({ hasError: false, error: null, errorInfo: null });
     window.location.reload();
   };

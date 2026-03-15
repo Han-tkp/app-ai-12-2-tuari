@@ -13,9 +13,18 @@
     "core:path:default",
     "fs:default",
     "process:default",
-    "fs:allow-document-read-recursive",
-    "fs:allow-document-write-recursive",
-    "fs:allow-document-meta-recursive",
+    {
+      "identifier": "fs:allow-document-read-recursive",
+      "allow": [{ "path": "$DOCUMENT/DropDetect_Workspace/**" }]
+    },
+    {
+      "identifier": "fs:allow-document-write-recursive",
+      "allow": [{ "path": "$DOCUMENT/DropDetect_Workspace/**" }]
+    },
+    {
+      "identifier": "fs:allow-document-meta-recursive",
+      "allow": [{ "path": "$DOCUMENT/DropDetect_Workspace/**" }]
+    },
     "fs:allow-mkdir",
     "fs:allow-exists",
     "dialog:allow-open",

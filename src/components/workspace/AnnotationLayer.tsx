@@ -136,9 +136,9 @@ const AnnotationLayer: React.FC<{ width: number; height: number; scale: number }
         <Layer scaleX={scale} scaleY={scale}>
           {annotations.map((ann) => (
             <Group key={ann.id}>
-              {ann.type === 'circle' && <Circle x={ann.x} y={ann.y} radius={ann.radius} stroke={ann.color} strokeWidth={lineThickness} />}
-              {ann.type === 'rect' && <Rect x={ann.x} y={ann.y} width={ann.width} height={ann.height} stroke={ann.color} strokeWidth={lineThickness} />}
-              {ann.type === 'line' && <Line points={ann.points} stroke={ann.color} strokeWidth={lineThickness} />}
+              {ann.type === 'circle' && ann.radius != null && <Circle x={ann.x} y={ann.y} radius={ann.radius} stroke={ann.color} strokeWidth={lineThickness} />}
+              {ann.type === 'rect' && ann.width != null && ann.height != null && <Rect x={ann.x} y={ann.y} width={ann.width} height={ann.height} stroke={ann.color} strokeWidth={lineThickness} />}
+              {ann.type === 'line' && ann.points && <Line points={ann.points} stroke={ann.color} strokeWidth={lineThickness} />}
               <Text
                 x={ann.x} y={ann.y - 20}
                 text={ann.detectionId

@@ -98,17 +98,49 @@ const SessionDropletTable: React.FC = () => {
   };
 
   const toggleSelectAll = () => {
-    const deletable = filteredData.filter(d => d.source !== 'Slide');
-    if (selectedIds.size === deletable.length) {
+    if (selectedIds.size === filteredData.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(deletable.map(d => d.id)));
+      setSelectedIds(new Set(filteredData.map(d => d.id)));
     }
   };
 
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
-    removeSessionDroplets(Array.from(selectedIds));
+
+    // Separate slide IDs from session IDs
+    const slideIdsToDelete = filteredData
+      .filter(d => d.source === 'Slide' && selectedIds.has(d.id))
+      .map(d => d.id);
+    const sessionIdsToDelete = filteredData
+      .filter(d => d.source !== 'Slide' && selectedIds.has(d.id))
+      .map(d => d.id);
+
+    // Remove slide droplets by index
+    if (slideIdsToDelete.length > 0) {
+      const store = useAppStore.getState();
+      const slide = store.slides.find(s => s.id === store.activeSlideId);
+      if (slide) {
+        // slideIdsToDelete are 1-based indices; remove from highest to lowest to preserve indices
+        const indices = slideIdsToDelete.map(id => id - 1).sort((a, b) => b - a);
+        const newDroplets = [...slide.droplets];
+        indices.forEach(idx => newDroplets.splice(idx, 1));
+        useAppStore.setState(state => ({
+          slides: state.slides.map(s =>
+            s.id === state.activeSlideId
+              ? { ...s, droplets: newDroplets }
+              : s
+          ),
+          isDirty: true,
+        }));
+      }
+    }
+
+    // Remove session (AI/Manual) droplets
+    if (sessionIdsToDelete.length > 0) {
+      removeSessionDroplets(sessionIdsToDelete);
+    }
+
     setSelectedIds(new Set());
     setIsSelectMode(false);
   };
@@ -255,7 +287,7 @@ const SessionDropletTable: React.FC = () => {
               {isSelectMode && (
                 <th className="w-6 px-1 py-1.5">
                   <button onClick={toggleSelectAll} className="flex items-center justify-center w-full">
-                    {selectedIds.size === filteredData.filter(d => d.source !== 'Slide').length && selectedIds.size > 0
+                    {selectedIds.size === filteredData.length && selectedIds.size > 0
                       ? <CheckSquare size={11} style={{ color: 'var(--accent-text)' }} />
                       : <SquareIcon size={11} style={{ color: 'var(--text4)' }} />
                     }
@@ -300,15 +332,14 @@ const SessionDropletTable: React.FC = () => {
                     style={{
                       background: isSelected ? 'var(--bg-active)' : rowNum % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface2)',
                     }}
-                    onClick={isSelectMode && d.source !== 'Slide' ? () => toggleSelect(d.id) : undefined}
+                    onClick={isSelectMode ? () => toggleSelect(d.id) : undefined}
                   >
                     {isSelectMode && (
                       <td className="w-6 px-1 py-1.5 text-center">
-                        {d.source !== 'Slide' ? (
-                          isSelected
-                            ? <CheckSquare size={11} style={{ color: 'var(--accent-text)' }} />
-                            : <SquareIcon size={11} style={{ color: 'var(--text4)' }} />
-                        ) : null}
+                        {isSelected
+                          ? <CheckSquare size={11} style={{ color: 'var(--accent-text)' }} />
+                          : <SquareIcon size={11} style={{ color: 'var(--text4)' }} />
+                        }
                       </td>
                     )}
                     <td className="px-2 py-1.5 text-left font-instrument text-[9px]" style={{ color: 'var(--text4)' }}>
@@ -346,9 +377,30 @@ const SessionDropletTable: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-1 py-1 w-8">
-                      {d.source !== 'Slide' && !isSelectMode && (
+                      {!isSelectMode && (
                         <button
-                          onClick={() => removeSessionDroplet(d.id)}
+                          onClick={() => {
+                            if (d.source === 'Slide') {
+                              // Remove from slide droplets — splice inside updater to avoid stale state
+                              const deleteIdx = d.id - 1; // d.id is 1-based index
+                              useAppStore.setState(state => {
+                                const slide = state.slides.find(s => s.id === state.activeSlideId);
+                                if (!slide) return state;
+                                const newDroplets = [...slide.droplets];
+                                newDroplets.splice(deleteIdx, 1);
+                                return {
+                                  slides: state.slides.map(s =>
+                                    s.id === state.activeSlideId
+                                      ? { ...s, droplets: newDroplets }
+                                      : s
+                                  ),
+                                  isDirty: true,
+                                };
+                              });
+                            } else {
+                              removeSessionDroplet(d.id);
+                            }
+                          }}
                           title="Remove"
                           className="w-5 h-5 flex items-center justify-center rounded-[3px] opacity-0 group-hover:opacity-100 transition-all"
                           style={{ color: 'var(--text4)' }}

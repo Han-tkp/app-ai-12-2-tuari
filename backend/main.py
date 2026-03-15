@@ -175,8 +175,12 @@ class LanguageConfig:
 DEFAULT_LANG = LanguageConfig('th')
 
 
-def open_camera(idx: int) -> cv2.VideoCapture:
+def open_camera(idx: int) -> cv2.VideoCapture | None:
     cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        logger.error("Camera %d failed to open", idx)
+        cap.release()
+        return None
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     cap.set(cv2.CAP_PROP_FPS, 30)
@@ -242,7 +246,12 @@ class DropletSystem:
             self.tracker = sv.ByteTrack(lost_track_buffer=PROFILE_TRACK_BUFFER[profile])
             logger.info("Profile overridden to %s (skip=1/%d, track_buffer=%d)", profile, self.inference_skip, PROFILE_TRACK_BUFFER[profile])
 
+    VALID_LENSES = {"4x", "10x"}
+
     def load_resources(self, lens: str):
+        if lens not in self.VALID_LENSES:
+            logger.warning("Invalid lens value: %s — ignoring", lens)
+            return
         self.lens = lens
         model_path = os.path.join(BASE_DIR, "fileonnx", f"yolov8n_{lens}.onnx")
         json_path = os.path.join(BASE_DIR, "resources", f"{lens}.json")
@@ -264,24 +273,27 @@ class DropletSystem:
 
     def calculate_stats(self):
         if not self.droplet_data: return 0.0, 0.0, 0, [0,0,0], 0
-        diams = sorted(self.droplet_data.values())
+        snapshot = dict(self.droplet_data)
+        diams = sorted(snapshot.values())
         vols = [(np.pi / 6) * (float(d)**3) for d in diams]
         total_vol = sum(vols)
         out_of_bounds = sum(1 for d in diams if d < 10.0 or d > 30.0)
         out_of_bounds_pct = (out_of_bounds / len(diams)) * 100 if len(diams) > 0 else 0
         if total_vol == 0: return 0.0, 0.0, len(diams), [0,0,0], round(out_of_bounds_pct, 1)
         cum_vol = np.cumsum(vols) / total_vol
-        dv10 = float(diams[np.searchsorted(cum_vol, 0.1)])
-        dv50 = float(diams[np.searchsorted(cum_vol, 0.5)])
-        dv90 = float(diams[np.searchsorted(cum_vol, 0.9)])
+        n = len(diams)
+        dv10 = float(diams[min(int(np.searchsorted(cum_vol, 0.1)), n - 1)])
+        dv50 = float(diams[min(int(np.searchsorted(cum_vol, 0.5)), n - 1)])
+        dv90 = float(diams[min(int(np.searchsorted(cum_vol, 0.9)), n - 1)])
         span = float((dv90 - dv10) / dv50) if dv50 > 0 else 0.0
         return dv50, span, len(diams), [dv10, dv50, dv90], round(out_of_bounds_pct, 1)
 
     def update_manual_data(self, manual_list):
         # Negative IDs represent manual annotations to avoid collision with tracker IDs
-        self.droplet_data = {k: v for k, v in self.droplet_data.items() if k >= 0}
+        new_data = {k: v for k, v in dict(self.droplet_data).items() if k >= 0}
         for i, d in enumerate(manual_list):
-            self.droplet_data[-(i+1000)] = float(d)
+            new_data[-(i+1000)] = float(d)
+        self.droplet_data = new_data
 
 system = DropletSystem()
 
@@ -292,10 +304,13 @@ def _compute_slide_stats(droplets: list[float]) -> dict:
     diams = sorted(droplets)
     vols = [(np.pi / 6) * (d ** 3) for d in diams]
     total_vol = sum(vols)
+    if total_vol == 0:
+        return {"dv10": 0.0, "dv50": 0.0, "dv90": 0.0, "span": 0.0, "count": len(diams)}
     cum = np.cumsum(vols) / total_vol
-    dv10 = float(diams[int(np.searchsorted(cum, 0.1))])
-    dv50 = float(diams[int(np.searchsorted(cum, 0.5))])
-    dv90 = float(diams[int(np.searchsorted(cum, 0.9))])
+    n = len(diams)
+    dv10 = float(diams[min(int(np.searchsorted(cum, 0.1)), n - 1)])
+    dv50 = float(diams[min(int(np.searchsorted(cum, 0.5)), n - 1)])
+    dv90 = float(diams[min(int(np.searchsorted(cum, 0.9)), n - 1)])
     span = float((dv90 - dv10) / dv50) if dv50 > 0 else 0.0
     return {"dv10": dv10, "dv50": dv50, "dv90": dv90, "span": span, "count": len(diams)}
 
@@ -573,16 +588,20 @@ def _build_excel(req: "SaveProjectRequest", excel_path: str, lang='th'):
 async def cleanup_autosave(project_name: str):
     """Clean up auto-save files for a specific project after successful manual save."""
     import shutil
+    import re as re_mod
     from pathlib import Path
-    
+
+    # Sanitize project_name to prevent glob injection
+    safe_name = re_mod.sub(r'[*?\[\]/\\]', '_', project_name)
+
     try:
         docs = Path.home() / "Documents" / "DropDetect_Projects"
         autosave_dir = docs / ".autosave"
-        
+
         if autosave_dir.exists():
             # Delete autosave files older than 7 days
             now = datetime.now()
-            for f in autosave_dir.glob(f"{project_name}*"):
+            for f in autosave_dir.glob(f"{safe_name}*"):
                 try:
                     # Delete files older than 7 days
                     mtime = datetime.fromtimestamp(f.stat().st_mtime)
@@ -609,8 +628,13 @@ async def save_project(req: SaveProjectRequest):
     excel_dir = workspace_dir / "Exports" / "Excel"
     autosave_dir = workspace_dir / "AutoSave"
     
+    import re
     # Check if this is an auto-save request
-    is_auto_save = hasattr(req, 'isAutoSave') and req.isAutoSave
+    is_auto_save = req.isAutoSave
+
+    # Sanitize project name — strip path separators and dangerous characters
+    safe_name = re.sub(r'[/\\:*?"<>|\.]{2,}', '_', req.project_name)
+    safe_name = re.sub(r'^\.+', '', safe_name).strip() or 'Untitled'
 
     # Create directories if they don't exist
     projects_dir.mkdir(parents=True, exist_ok=True)
@@ -619,23 +643,24 @@ async def save_project(req: SaveProjectRequest):
 
     if is_auto_save:
         # Auto-save: Save in AutoSave/{project_name}/
-        project_autosave_dir = autosave_dir / req.project_name
+        project_autosave_dir = autosave_dir / safe_name
         project_autosave_dir.mkdir(parents=True, exist_ok=True)
-        project_base = project_autosave_dir / req.project_name
+        project_base = project_autosave_dir / safe_name
         drop_path = f"{project_base}.drop"
         # Auto-save doesn't need Excel, just .drop file
         excel_path = None
     else:
         # Manual save: Save in Projects/ and Exports/Excel/
-        project_base = projects_dir / req.project_name
-        excel_path = excel_dir / f"{req.project_name}_Report.xlsx"
+        project_base = projects_dir / safe_name
+        excel_path = excel_dir / f"{safe_name}_Report.xlsx"
         drop_path = f"{project_base}.drop"
 
     try:
         # Build Excel only for manual saves (not auto-save)
         if excel_path and not is_auto_save:
             lang = req.language if hasattr(req, 'language') else 'th'
-            _build_excel(req, str(excel_path), lang=lang)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _build_excel, req, str(excel_path), lang)
     except PermissionError as e:
         logger.error(f"Excel file is locked: {e}")
         raise HTTPException(status_code=409, detail="Excel file is currently in use. Please close it and try again.")
@@ -667,6 +692,11 @@ async def save_project(req: SaveProjectRequest):
 
 @app.get("/api/load-project")
 async def load_project(path: str):
+    from pathlib import Path as P
+    # Validate: only allow .drop files from Documents or known locations
+    resolved = P(path).resolve()
+    if not str(resolved).endswith('.drop'):
+        raise HTTPException(status_code=400, detail="Only .drop files are supported")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
     try:
@@ -756,6 +786,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     if cap is not None:
                         cap.release()
                     cap = open_camera(camera_idx)
+                    if cap is None:
+                        camera_active = False
+                        await safe_send({"type": "camera_status", "status": "error", "message": f"Camera {camera_idx} failed to open"})
+                        continue
                     camera_active = True
                     imported_frame = None  # Clear imported frame when camera starts
                     # Stop video playback when camera starts
@@ -859,7 +893,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         language=lang,
                     )
 
-                    _build_excel(req, str(excel_path), lang=lang)
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, _build_excel, req, str(excel_path), lang)
                     logger.info(f"Quick export saved: {excel_path}")
 
                     await safe_send({
@@ -891,7 +926,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         language=lang,
                     )
 
-                    _build_excel(req, str(excel_path), lang=lang)
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, _build_excel, req, str(excel_path), lang)
                     logger.info(f"Full export saved: {excel_path}")
 
                     await safe_send({
@@ -929,9 +965,11 @@ async def websocket_endpoint(websocket: WebSocket):
                         img_input = np.expand_dims(np.transpose(img_input, (2, 0, 1)), axis=0)
 
                         _inp = img_input
+                        _session = system.session
+                        _input_name = system.input_name
                         outputs = await loop.run_in_executor(
                             _inference_executor,
-                            lambda: system.session.run(None, {system.input_name: _inp})
+                            lambda: _session.run(None, {_input_name: _inp})
                         )
 
                         preds = np.squeeze(outputs[0]).T
@@ -1198,7 +1236,7 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.error("WebSocket command handler error: %s", e)
             ws_alive = False
 
-    asyncio.create_task(handle_commands())
+    cmd_task = asyncio.create_task(handle_commands())
 
     try:
         static_frame_processed = False
@@ -1217,9 +1255,17 @@ async def websocket_endpoint(websocket: WebSocket):
                             "message": "Camera disconnected"
                         }):
                             break
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(2)
                         cap.release()
-                        cap = open_camera(camera_idx)
+                        new_cap = open_camera(camera_idx)
+                        if new_cap is None:
+                            # Camera failed to reopen — stop trying, wait for user action
+                            camera_active = False
+                            cap = None
+                            logger.error("Camera %d failed to reopen — stopping", camera_idx)
+                            await safe_send({"type": "camera_status", "status": "error", "message": "Camera failed to reopen"})
+                        else:
+                            cap = new_cap
                         continue
                 elif video_playing and video_cap is not None:
                     # Video playback mode — stream frames at configured speed
@@ -1267,9 +1313,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     img = np.expand_dims(np.transpose(img, (2, 0, 1)), axis=0)
 
                     _img = img
+                    _session = system.session
+                    _input_name = system.input_name
                     outputs = await loop.run_in_executor(
                         _inference_executor,
-                        lambda: system.session.run(None, {system.input_name: _img})
+                        lambda: _session.run(None, {_input_name: _img})
                     )
 
                     preds = np.squeeze(outputs[0]).T
@@ -1305,13 +1353,12 @@ async def websocket_endpoint(websocket: WebSocket):
                             frame = label_annotator.annotate(scene=frame, detections=detections, labels=labels)
 
                 # Prepare unified droplet list for the frontend table
-                unified_list = []
-                for tid, diam in system.droplet_data.items():
-                    unified_list.append({
-                        "id": int(tid),
-                        "diameter": float(diam),
-                        "source": "Manual" if tid < 0 else "AI"
-                    })
+                # Snapshot dict to avoid RuntimeError during concurrent mutation
+                droplet_snapshot = dict(system.droplet_data)
+                unified_list = [
+                    {"id": int(tid), "diameter": float(diam), "source": "Manual" if tid < 0 else "AI"}
+                    for tid, diam in droplet_snapshot.items()
+                ]
                 unified_list.sort(key=lambda x: abs(x["id"]))
 
                 vmd, span, count, _, out_pct = system.calculate_stats()
@@ -1363,6 +1410,11 @@ async def websocket_endpoint(websocket: WebSocket):
         # Don't try to send on dead WS — just log
     finally:
         ws_alive = False
+        cmd_task.cancel()
+        try:
+            await cmd_task
+        except asyncio.CancelledError:
+            pass
         if cap is not None:
             logger.info("Releasing camera")
             cap.release()

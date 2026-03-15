@@ -16,12 +16,15 @@ const LS_KEYS = {
   FILTER_MAX: 'dd-filter-max',
   ZOOM_WITH_CTRL: 'dd-zoom-with-ctrl',
   EXCEL_LANGUAGE: 'dd-excel-language',
+  EXPORT_PATH: 'dd-export-path',
+  ANNOTATION_FADE_DELAY: 'dd-annotation-fade-delay',
 };
 
 // ── Restore persisted preferences ────────────────────────────────────────────
-const _storedTheme = (localStorage.getItem(LS_KEYS.THEME) as 'dark' | 'light' | 'warm') || 'dark';
+const _storedTheme = (localStorage.getItem(LS_KEYS.THEME) as 'dark' | 'light' | 'warm') || 'light';
 const _storedShell = (localStorage.getItem(LS_KEYS.SHELL) as 'macos' | 'windows') || 'macos';
-const _storedAnnotationFadeDelay = parseInt(localStorage.getItem('dd-annotation-fade-delay') || '1500', 10);
+const _storedAnnotationFadeDelay = parseInt(localStorage.getItem(LS_KEYS.ANNOTATION_FADE_DELAY) || '1500', 10);
+const _storedExportPath = localStorage.getItem(LS_KEYS.EXPORT_PATH) || '';
 const _storedAIConfidence = parseFloat(localStorage.getItem(LS_KEYS.AI_CONFIDENCE) || '0.25');
 const _storedObjectiveLens = (localStorage.getItem(LS_KEYS.OBJECTIVE_LENS) as '4x' | '10x') || '10x';
 const _storedTargetSize = parseInt(localStorage.getItem(LS_KEYS.TARGET_SIZE) || '224', 10);
@@ -233,6 +236,8 @@ const INITIAL_SETTINGS_POS = { x: 260, y: 80 };
 const INITIAL_MANUAL_EDIT_POS = { x: 900, y: 400 };
 const INITIAL_SESSION_TABLE_POS = { x: 700, y: 300 };
 
+let _syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const useAppStore = create<AppState>((set, get) => ({
   projectName: 'Untitled Project',
   mode: 'Analyze',
@@ -289,7 +294,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   targetSize: _storedTargetSize,
   filterMin: _storedFilterMin,
   filterMax: _storedFilterMax,
-  exportPath: '',
+  exportPath: _storedExportPath,
   excelLanguage: _storedExcelLanguage,
 
   hotkeyLiveAI: 'F5',
@@ -405,6 +410,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
+      // Set timestamp so recovery dialog can show when it was saved
+      set({ lastAutoSave: data.timestamp || 0 });
+
       // Only return true to indicate recoverable data exists
       // Don't load into state yet — wait for user confirmation
       return true;
@@ -506,12 +514,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   syncManualAnnotations: async () => {
     const { annotations, currentSessionDroplets } = get();
-    // Sync all manual annotations (including line measurements)
-    // Exclude AI-detected annotations (they're already in backend droplet_data)
     const manualAnns = annotations.filter(a => !a.detectionId);
-    const manualData = manualAnns.map(a => a.diameter_um);
 
-    // Update local session droplets: keep AI/detection entries, rebuild manual entries
+    // Update local session droplets immediately
     const nonManualDroplets = currentSessionDroplets.filter(d => d.source !== 'Manual');
     const manualDroplets = manualAnns.map((a, i) => ({
       id: -(i + 1000),
@@ -520,15 +525,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     set({ currentSessionDroplets: [...nonManualDroplets, ...manualDroplets] });
 
-    try {
-      await fetch(`${API_BASE}/api/update-manual-data`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: manualData })
-      });
-    } catch (err) {
-      console.error('Manual annotation sync failed:', err);
-    }
+    // Debounce the backend sync (150ms)
+    if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
+    _syncDebounceTimer = setTimeout(async () => {
+      try {
+        const latestManualAnns = get().annotations.filter(a => !a.detectionId);
+        const latestData = latestManualAnns.map(a => a.diameter_um);
+        await fetch(`${API_BASE}/api/update-manual-data`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: latestData })
+        });
+      } catch (err) {
+        console.error('Manual annotation sync failed:', err);
+      }
+    }, 150);
   },
   removeAnnotationVisual: (id) => {
     set((state) => ({
@@ -579,8 +590,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     localStorage.setItem(LS_KEYS.FILTER_MIN, String(filterMin));
     localStorage.setItem(LS_KEYS.FILTER_MAX, String(filterMax));
   },
-  setExportPath: (exportPath) => set({ exportPath }),
-  setExcelLanguage: (excelLanguage) => set({ excelLanguage }),
+  setExportPath: (exportPath) => {
+    set({ exportPath });
+    localStorage.setItem(LS_KEYS.EXPORT_PATH, exportPath);
+  },
+  setExcelLanguage: (excelLanguage) => {
+    set({ excelLanguage });
+    localStorage.setItem(LS_KEYS.EXCEL_LANGUAGE, excelLanguage);
+  },
   fetchSessionAndAddToSlide: async () => {
     const { activeSlideId, filterMin, filterMax, targetSize } = get();
     if (!activeSlideId) {
@@ -784,7 +801,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSnapshotSourceFilter: (snapshotSourceFilter) => set({ snapshotSourceFilter }),
   setAnnotationFadeDelay: (annotationFadeDelay) => {
     set({ annotationFadeDelay });
-    localStorage.setItem('dd-annotation-fade-delay', String(annotationFadeDelay));
+    localStorage.setItem(LS_KEYS.ANNOTATION_FADE_DELAY, String(annotationFadeDelay));
   },
   setZoomWithCtrl: (zoomWithCtrl) => {
     set({ zoomWithCtrl });

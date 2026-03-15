@@ -64,13 +64,20 @@ const Workspace: React.FC = () => {
         // Sync current state to backend (lightweight, no side effects)
         socket.send(JSON.stringify({ action: 'set_ai_active', active: state.isAIRunning }));
         socket.send(JSON.stringify({ action: 'set_lens', lens: state.objectiveLens }));
-        // NOTE: Don't auto-start camera on reconnect — the camera start/stop
-        // is handled by the isCameraRunning useEffect below. This prevents
-        // rapid camera open/close cycles during HMR reloads.
+        // Resend camera start on reconnect if camera was running
+        if (state.isCameraRunning) {
+          socket.send(JSON.stringify({ action: 'start_camera', index: state.cameraIndex }));
+        }
       };
 
       socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+        let data: any;
+        try {
+          data = JSON.parse(event.data);
+        } catch (err) {
+          console.warn('[WS] Failed to parse message:', err);
+          return;
+        }
         if (data.type === 'hardware_info') {
           setHardwareInfo({
             profile: data.profile,
