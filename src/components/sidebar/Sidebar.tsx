@@ -43,7 +43,11 @@ const Sidebar: React.FC = () => {
     isManualEditActive, setManualEditActive,
     activeTool, setActiveTool,
     clearAnnotations,
+    importedMediaPath,
   } = useAppStore();
+
+  // AI/Snapshot available when camera is running OR an image has been imported
+  const canUseAI = isCameraRunning || !!importedMediaPath;
 
   const [isSlideSelectOpen, setSlideSelectOpen] = useState(false);
   const activeSlide = slides.find(s => s.id === activeSlideId);
@@ -53,8 +57,18 @@ const Sidebar: React.FC = () => {
     else window.dispatchEvent(new CustomEvent('send-backend-command', { detail: { action: 'export_excel', language: excelLanguage } }));
   };
 
+  const handleQuickExport = () => {
+    // Quick export: Session data only, no slides
+    window.dispatchEvent(new CustomEvent('send-backend-command', { 
+      detail: { 
+        action: 'quick_export', 
+        language: excelLanguage 
+      } 
+    }));
+  };
+
   const handleSnapshot = () => {
-    if (!isCameraRunning) return;
+    if (!isCameraRunning && !importedMediaPath) return;
     window.dispatchEvent(new CustomEvent('send-backend-command', { detail: { action: 'take_snapshot' } }));
   };
 
@@ -138,9 +152,9 @@ const Sidebar: React.FC = () => {
               <div className="space-y-2">
                 <button
                   onClick={() => setAIRunning(!isAIRunning)}
-                  disabled={!isCameraRunning}
+                  disabled={!canUseAI}
                   className={
-                    !isCameraRunning
+                    !canUseAI
                       ? 'btn-secondary w-full h-10 opacity-40 cursor-not-allowed'
                       : isAIRunning
                         ? 'btn-danger'
@@ -160,7 +174,7 @@ const Sidebar: React.FC = () => {
 
                 <button
                   onClick={handleSnapshot}
-                  disabled={!isCameraRunning}
+                  disabled={!canUseAI}
                   className="btn-secondary"
                 >
                   <CameraIcon size={13} />
@@ -184,7 +198,20 @@ const Sidebar: React.FC = () => {
             </SidebarSection>
 
             {/* Manual Edit */}
-            <SidebarSection label="Manual Edit" last>
+            <SidebarSection 
+              label="Manual Edit" 
+              last
+              headerRight={
+                <button
+                  onClick={() => setManualEditActive(!isManualEditActive)}
+                  className="text-[10px] font-semibold flex items-center gap-0.5 transition-colors"
+                  style={{ color: isManualEditActive ? 'var(--mac-red)' : 'var(--accent-text)' }}
+                  title={isManualEditActive ? 'Collapse' : 'Expand'}
+                >
+                  {isManualEditActive ? '✕' : '⚙'}
+                </button>
+              }
+            >
               <div className="space-y-2">
                 <button
                   onClick={() => setManualEditActive(!isManualEditActive)}
@@ -233,11 +260,27 @@ const Sidebar: React.FC = () => {
           </>
         ) : (
           <>
-            {/* Slide Summary Table */}
-            <SidebarSection label={`Slide Summary (${slides.length})`}>
-              <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            {/* Slides & Summary — grouped together */}
+            <SidebarSection label={`Slides & Summary (${slides.length})`} headerRight={
+              <button
+                onClick={addSlide}
+                className="text-[10px] font-semibold flex items-center gap-0.5 transition-colors"
+                style={{ color: 'var(--accent-text)' }}
+              >
+                <Plus size={11} strokeWidth={2.5} /> Add
+              </button>
+            }>
+              {/* Slide Summary Table — scrollable when >3 slides */}
+              <div
+                className="rounded-lg border overflow-hidden mb-2"
+                style={{
+                  borderColor: 'var(--border)',
+                  maxHeight: slides.length > 3 ? '160px' : 'none',
+                  overflowY: slides.length > 3 ? 'auto' : 'visible',
+                }}
+              >
                 <table className="w-full text-left text-[11px]">
-                  <thead style={{ background: 'var(--bg-surface3)' }}>
+                  <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface3)' }}>
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
                       <th className="px-2 py-1.5 text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Slide</th>
                       <th className="px-2 py-1.5 text-right text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text3)' }}>VMD</th>
@@ -287,60 +330,7 @@ const Sidebar: React.FC = () => {
                 </table>
               </div>
 
-            </SidebarSection>
-
-            {/* Filter */}
-            <SidebarSection label="Filter Range (µm)">
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <div className="space-y-1">
-                  <span className="text-[9px] font-semibold uppercase" style={{ color: 'var(--text4)', letterSpacing: '0.06em' }}>Min</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={filterMin}
-                    onChange={(e) => handleFilterMin(e.target.value)}
-                    className="w-full rounded-md px-2.5 py-1.5 text-[12px] font-instrument outline-none transition-colors border"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border-strong)', color: 'var(--text1)' }}
-                    onFocus={e => (e.target as HTMLInputElement).style.borderColor = 'var(--accent)'}
-                    onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'var(--border-strong)'}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[9px] font-semibold uppercase" style={{ color: 'var(--text4)', letterSpacing: '0.06em' }}>Max</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={filterMax}
-                    onChange={(e) => handleFilterMax(e.target.value)}
-                    className="w-full rounded-md px-2.5 py-1.5 text-[12px] font-instrument outline-none transition-colors border"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border-strong)', color: 'var(--text1)' }}
-                    onFocus={e => (e.target as HTMLInputElement).style.borderColor = 'var(--accent)'}
-                    onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'var(--border-strong)'}
-                  />
-                </div>
-              </div>
-              <div
-                className="w-full py-1.5 rounded-md text-center text-[10px] font-semibold border"
-                style={{
-                  background: 'var(--bg-active)',
-                  borderColor: 'rgba(59,130,246,0.25)',
-                  color: 'var(--accent-text)',
-                }}
-              >
-                WHO Criteria: {filterMin}–{filterMax} µm
-              </div>
-            </SidebarSection>
-
-            {/* Slide selector */}
-            <SidebarSection label={`Slides (${slides.length})`} headerRight={
-              <button
-                onClick={addSlide}
-                className="text-[10px] font-semibold flex items-center gap-0.5 transition-colors"
-                style={{ color: 'var(--accent-text)' }}
-              >
-                <Plus size={11} strokeWidth={2.5} /> Add
-              </button>
-            }>
+              {/* Slide selector dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setSlideSelectOpen(!isSlideSelectOpen)}
@@ -436,6 +426,48 @@ const Sidebar: React.FC = () => {
               </div>
             </SidebarSection>
 
+            {/* Filter */}
+            <SidebarSection label="Filter Range (µm)">
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-semibold uppercase" style={{ color: 'var(--text4)', letterSpacing: '0.06em' }}>Min</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={filterMin}
+                    onChange={(e) => handleFilterMin(e.target.value)}
+                    className="w-full rounded-md px-2.5 py-1.5 text-[12px] font-instrument outline-none transition-colors border"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border-strong)', color: 'var(--text1)' }}
+                    onFocus={e => (e.target as HTMLInputElement).style.borderColor = 'var(--accent)'}
+                    onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'var(--border-strong)'}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[9px] font-semibold uppercase" style={{ color: 'var(--text4)', letterSpacing: '0.06em' }}>Max</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={filterMax}
+                    onChange={(e) => handleFilterMax(e.target.value)}
+                    className="w-full rounded-md px-2.5 py-1.5 text-[12px] font-instrument outline-none transition-colors border"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border-strong)', color: 'var(--text1)' }}
+                    onFocus={e => (e.target as HTMLInputElement).style.borderColor = 'var(--accent)'}
+                    onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'var(--border-strong)'}
+                  />
+                </div>
+              </div>
+              <div
+                className="w-full py-1.5 rounded-md text-center text-[10px] font-semibold border"
+                style={{
+                  background: 'var(--bg-active)',
+                  borderColor: 'rgba(59,130,246,0.25)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                WHO Criteria: {filterMin}–{filterMax} µm
+              </div>
+            </SidebarSection>
+
             {/* Target Size */}
             <SidebarSection label="Target Sample Size (n)">
               <div
@@ -492,10 +524,19 @@ const Sidebar: React.FC = () => {
                 </div>
                 
                 <button
+                  onClick={handleQuickExport}
+                  className="btn-secondary"
+                  title="Export current session data only"
+                >
+                  <Download size={13} /> Export Session
+                </button>
+
+                <button
                   onClick={handleExport}
                   className="btn-primary"
+                  title="Export complete project with all slides"
                 >
-                  <Download size={14} /> Export Excel Report
+                  <Download size={14} /> Full Export (Project)
                 </button>
               </div>
             </SidebarSection>

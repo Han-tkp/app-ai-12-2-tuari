@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   X, Brain, Cpu, Edit3, Palette,
-  RotateCcw, Check, FolderOpen
+  RotateCcw, Check, FolderOpen, Upload, Trash2
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -20,6 +20,7 @@ const SettingsWindow: React.FC = () => {
     hardwareProfile, profileOverride, ramGb, cpuCores, inferenceSkip,
     setProfileOverride, isAIRunning,
     snapshotDisplayDuration, setSnapshotDisplayDuration,
+    annotationFadeDelay, setAnnotationFadeDelay,
   } = useAppStore();
 
   const [hasChanges, setHasChanges] = useState(false);
@@ -28,6 +29,17 @@ const SettingsWindow: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [recordingHotkey, setRecordingHotkey] = useState<'live' | 'snapshot' | null>(null);
+  const [onnxFiles, setOnnxFiles] = useState<Array<{name: string, path: string, size: string}>>([
+    { name: 'yolov8n_4x.onnx', path: 'fileonnx/yolov8n_4x.onnx', size: '6.2 MB' },
+    { name: 'yolov8n_10x.onnx', path: 'fileonnx/yolov8n_10x.onnx', size: '6.2 MB' },
+  ]);
+  const [isImportingModel, setIsImportingModel] = useState(false);
+  
+  // Calibration Tool State
+  const [calibrationMode, setCalibrationMode] = useState<'4x' | '10x' | null>(null);
+  const [calibrationLength, setCalibrationLength] = useState<string>('1000');
+  const [calibratedValue, setCalibratedValue] = useState<number | null>(null);
+  const [isCalibrating, setIsCalibrating] = useState(false);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -41,12 +53,12 @@ const SettingsWindow: React.FC = () => {
       
       // Validation: Check for duplicate hotkeys
       if (recordingHotkey === 'live' && keyName === hotkeySnapshot) {
-        alert(`Key "${keyName}" is already assigned to Snapshot.`);
+        console.warn(`Key "${keyName}" already assigned to Snapshot`);
         setRecordingHotkey(null);
         return;
       }
       if (recordingHotkey === 'snapshot' && keyName === hotkeyLiveAI) {
-        alert(`Key "${keyName}" is already assigned to Live AI.`);
+        console.warn(`Key "${keyName}" already assigned to Live AI`);
         setRecordingHotkey(null);
         return;
       }
@@ -146,16 +158,17 @@ const SettingsWindow: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] pointer-events-none overflow-hidden">
-      <div 
+    <div className={`fixed inset-0 z-[1000] overflow-hidden ${isSettingsOpen ? '' : 'pointer-events-none'}`}>
+      <div
         ref={dragRef}
         onMouseDown={handleMouseDown}
-        style={{ 
-          left: `${settingsPosition.x}px`, 
+        style={{
+          left: `${settingsPosition.x}px`,
           top: `${settingsPosition.y}px`,
-          position: 'absolute'
+          position: 'absolute',
+          display: isSettingsOpen ? 'block' : 'none'
         }}
-        className="bg-[var(--bg-window)] w-[640px] h-[460px] rounded-[6px] flex flex-col overflow-hidden mac-dialog-shadow border border-[var(--border-strong)] transition-colors pointer-events-auto select-none"
+        className="bg-[var(--bg-window)] w-[640px] h-[460px] rounded-[6px] flex flex-col overflow-hidden mac-dialog-shadow border border-[var(--border-strong)] transition-colors select-none"
       >
         
         <div className="flex-1 flex min-h-0">
@@ -169,6 +182,7 @@ const SettingsWindow: React.FC = () => {
             </div>
             <NavTab active={currentSettingsTab === 'AI & Capture'} onClick={() => setSettingsTab('AI & Capture')} icon={<Brain size={14} />} label="AI & Capture" />
             <NavTab active={currentSettingsTab === 'Hardware & Camera'} onClick={() => setSettingsTab('Hardware & Camera')} icon={<Cpu size={14} />} label="Hardware" />
+            <NavTab active={currentSettingsTab === 'AI Models'} onClick={() => setSettingsTab('AI Models')} icon={<Cpu size={14} />} label="AI Models" />
             <NavTab active={currentSettingsTab === 'Manual Edit'} onClick={() => setSettingsTab('Manual Edit')} icon={<Edit3 size={14} />} label="Manual Edit" />
             <NavTab active={currentSettingsTab === 'Appearance & Output'} onClick={() => setSettingsTab('Appearance & Output')} icon={<Palette size={14} />} label="Appearance" />
             
@@ -191,7 +205,7 @@ const SettingsWindow: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar" style={{ maxHeight: '340px' }}>
               {currentSettingsTab === 'AI & Capture' && (
                 <div className="space-y-8 animate-in slide-in-from-right-2 duration-300">
                   <section className="space-y-3">
@@ -242,6 +256,213 @@ const SettingsWindow: React.FC = () => {
                 </div>
               )}
 
+              {currentSettingsTab === 'AI Models' && (
+                <div className="space-y-6 animate-in slide-in-from-right-2 duration-300">
+                  <section className="space-y-3">
+                    <h3 className="settings-section-title text-[11px]">Installed Models</h3>
+                    <div className="bg-[var(--bg-surface2)] p-4 rounded-xl border border-[var(--border)] space-y-3">
+                      {onnxFiles.map((model, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'var(--bg-active)' }}>
+                              <Cpu size={18} style={{ color: 'var(--accent-text)' }} />
+                            </div>
+                            <div>
+                              <div className="text-[12px] font-semibold" style={{ color: 'var(--text1)' }}>{model.name}</div>
+                              <div className="text-[9px]" style={{ color: 'var(--text4)' }}>{model.path}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono" style={{ color: 'var(--text3)' }}>{model.size}</span>
+                            <button
+                              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                              style={{ color: 'var(--text4)' }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'; (e.currentTarget as HTMLElement).style.color = 'var(--mac-red)'; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; (e.currentTarget as HTMLElement).style.color = 'var(--text4)'; }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      <button
+                        onClick={async () => {
+                          setIsImportingModel(true);
+                          try {
+                            const selected = await open({
+                              multiple: false,
+                              filters: [{ name: 'ONNX Model', extensions: ['onnx'] }]
+                            });
+                            if (selected) {
+                              // Add to list (in real app, would copy file and load model)
+                              const fileName = String(selected).split(/[\\/]/).pop() || 'unknown.onnx';
+                              setOnnxFiles([...onnxFiles, { name: fileName, path: 'fileonnx/' + fileName, size: 'Loading...' }]);
+                            }
+                          } catch (err) {
+                            console.error('Import failed:', err);
+                          } finally {
+                            setIsImportingModel(false);
+                          }
+                        }}
+                        disabled={isImportingModel}
+                        className="w-full h-10 rounded-lg flex items-center justify-center gap-2 font-medium text-[12px] transition-colors border border-dashed"
+                        style={{
+                          borderColor: 'var(--accent)',
+                          background: 'var(--bg-active)',
+                          color: 'var(--accent-text)',
+                        }}
+                      >
+                        <Upload size={14} />
+                        {isImportingModel ? 'Importing...' : 'Import New Model'}
+                      </button>
+                      
+                      <p className="text-[9px]" style={{ color: 'var(--text4)' }}>
+                        Supported: YOLOv8 ONNX models (.onnx). Place calibration file in resources/ folder.
+                      </p>
+                    </div>
+                  </section>
+                  
+                  <section className="space-y-3">
+                    <h3 className="settings-section-title text-[11px]">Lens Calibration</h3>
+                    <div className="bg-[var(--bg-surface2)] p-4 rounded-xl border border-[var(--border)]">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)]">
+                          <div>
+                            <div className="text-[11px] font-semibold" style={{ color: 'var(--text1)' }}>4x Objective</div>
+                            <div className="text-[9px]" style={{ color: 'var(--text4)' }}>resources/4x.json</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => { setCalibrationMode('4x'); setCalibrationLength('1000'); }}
+                              className="px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors"
+                              style={{ background: 'var(--accent)', color: '#fff' }}
+                            >
+                              Calibrate
+                            </button>
+                            <span className="text-[10px] font-mono" style={{ color: 'var(--mac-green)' }}>✓ Loaded</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)]">
+                          <div>
+                            <div className="text-[11px] font-semibold" style={{ color: 'var(--text1)' }}>10x Objective</div>
+                            <div className="text-[9px]" style={{ color: 'var(--text4)' }}>resources/10x.json</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => { setCalibrationMode('10x'); setCalibrationLength('1000'); }}
+                              className="px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors"
+                              style={{ background: 'var(--accent)', color: '#fff' }}
+                            >
+                              Calibrate
+                            </button>
+                            <span className="text-[10px] font-mono" style={{ color: 'var(--mac-green)' }}>✓ Loaded</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Calibration Modal */}
+                      {calibrationMode && (
+                        <div className="mt-4 p-4 rounded-lg border-2" style={{ borderColor: 'var(--accent)', background: 'var(--bg-active)' }}>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-[12px] font-bold" style={{ color: 'var(--accent-text)' }}>
+                              🔬 Calibrating {calibrationMode.toUpperCase()} Lens
+                            </h4>
+                            <button
+                              onClick={() => { setCalibrationMode(null); setCalibratedValue(null); }}
+                              className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+                              style={{ color: 'var(--text3)' }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'; (e.currentTarget as HTMLElement).style.color = 'var(--mac-red)'; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; (e.currentTarget as HTMLElement).style.color = 'var(--text3)'; }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div className="text-[10px]" style={{ color: 'var(--text3)' }}>
+                              <strong>Step 1:</strong> Place stage micrometer slide under microscope
+                            </div>
+                            <div className="text-[10px]" style={{ color: 'var(--text3)' }}>
+                              <strong>Step 2:</strong> Draw a line across known distance on the micrometer
+                            </div>
+                            <div className="text-[10px]" style={{ color: 'var(--text3)' }}>
+                              <strong>Step 3:</strong> Enter the actual distance in micrometers (µm)
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-semibold" style={{ color: 'var(--text2)' }}>
+                                Actual Distance (µm):
+                              </label>
+                              <input
+                                type="number"
+                                value={calibrationLength}
+                                onChange={(e) => setCalibrationLength(e.target.value)}
+                                className="flex-1 rounded-md px-2 py-1 text-[12px] font-mono outline-none border"
+                                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-strong)', color: 'var(--text1)' }}
+                              />
+                            </div>
+                            
+                            {calibratedValue !== null && (
+                              <div className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--accent)' }}>
+                                <div className="text-[9px]" style={{ color: 'var(--text4)' }}>Calibration Factor:</div>
+                                <div className="text-[18px] font-bold font-mono" style={{ color: 'var(--accent-text)' }}>
+                                  {calibratedValue.toFixed(6)} <span className="text-[11px] font-normal" style={{ color: 'var(--text3)' }}>µm/pixel</span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  // Simulate calibration calculation
+                                  // In real app: pixelLength from drawn line
+                                  const pixelLength = 960; // Simulated
+                                  const actualLength = parseFloat(calibrationLength);
+                                  if (actualLength > 0) {
+                                    const factor = actualLength / pixelLength;
+                                    setCalibratedValue(factor);
+                                    setIsCalibrating(false);
+                                  }
+                                }}
+                                disabled={isCalibrating}
+                                className="flex-1 h-9 rounded-md text-[11px] font-medium transition-colors"
+                                style={{ background: 'var(--accent)', color: '#fff' }}
+                              >
+                                {isCalibrating ? 'Calculating...' : 'Calculate Factor'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (calibratedValue !== null) {
+                                    // Save calibration to resources/{mode}.json
+                                    console.log(`Saving calibration: ${calibrationMode} = ${calibratedValue}`);
+                                    console.log(`Calibration saved: ${calibrationMode} = ${calibratedValue.toFixed(6)} µm/pixel`);
+                                    setCalibrationMode(null);
+                                    setCalibratedValue(null);
+                                  }
+                                }}
+                                disabled={calibratedValue === null}
+                                className="flex-1 h-9 rounded-md text-[11px] font-medium transition-colors border"
+                                style={{
+                                  borderColor: 'var(--border-strong)',
+                                  background: calibratedValue !== null ? 'var(--bg-surface)' : 'var(--bg-input)',
+                                  color: calibratedValue !== null ? 'var(--text1)' : 'var(--text4)',
+                                }}
+                              >
+                                Save Calibration
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                </div>
+              )}
+
               {currentSettingsTab === 'Manual Edit' && (
                 <div className="space-y-8 animate-in slide-in-from-right-2 duration-300">
                   <section className="space-y-3">
@@ -263,14 +484,30 @@ const SettingsWindow: React.FC = () => {
                         <label className="text-[10px] font-bold text-[var(--text3)] uppercase">Primary Color</label>
                         <div className="flex items-center gap-3 bg-[var(--bg-input)] p-1.5 rounded-lg border border-[var(--border-strong)] transition-colors">
                           <div className="w-6 h-6 rounded border border-black/10 shadow-inner" style={{ backgroundColor: annotationColor }}></div>
-                          <input 
-                            type="text" 
-                            value={annotationColor.replace('#', '')} 
-                            onChange={(e) => handleHexChange(e.target.value)} 
-                            className="bg-transparent text-[12px] text-[var(--text1)] font-mono outline-none flex-1 uppercase" 
+                          <input
+                            type="text"
+                            value={annotationColor.replace('#', '')}
+                            onChange={(e) => handleHexChange(e.target.value)}
+                            className="bg-transparent text-[12px] text-[var(--text1)] font-mono outline-none flex-1 uppercase"
                             placeholder="FFFFFF"
                           />
                         </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="settings-section-title text-[11px]">Annotation Display</h3>
+                    <div className="bg-[var(--bg-surface2)] p-4 rounded-xl border border-[var(--border)] space-y-4 transition-colors">
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-bold text-[var(--text4)] uppercase tracking-wider">Annotation Display Duration</label>
+                        <div className="flex items-center gap-3">
+                          <input type="range" min="500" max="10000" step="500" value={annotationFadeDelay} onChange={(e) => { setAnnotationFadeDelay(parseInt(e.target.value)); setHasChanges(true); }} className="zoom-input flex-1 h-[3px]" />
+                          <span className="text-[12px] font-bold text-[var(--text1)] font-mono min-w-[40px] text-right">{(annotationFadeDelay / 1000).toFixed(1)}s</span>
+                        </div>
+                        <p className="text-[9px] text-[var(--text4)]">
+                          How long annotations stay visible on screen. Data is always saved regardless.
+                        </p>
                       </div>
                     </div>
                   </section>

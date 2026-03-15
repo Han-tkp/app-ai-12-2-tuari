@@ -5,7 +5,14 @@
       "Bash(cd \"C:/Users/h4n/Desktop/webappsdesktop/backend\" && \"./venv/Scripts/python.exe\" -c \"import supervision; print\\(supervision.__version__\\)\" && \"./venv/Scripts/python.exe\" -c \"import inspect, supervision as sv; print\\(inspect.signature\\(sv.ByteTrack.__init__\\)\\)\")",
       "Bash(npx vite:*)",
       "Bash(npx tsc:*)",
-      "Bash(ls -la /c/Users/h4n/Desktop/webappsdesktop/backend/ | grep -E \"\\\\.\\(py|txt|toml\\)$\")"
+      "Bash(ls -la /c/Users/h4n/Desktop/webappsdesktop/backend/ | grep -E \"\\\\.\\(py|txt|toml\\)$\")",
+      "Bash(cd:*)",
+      "Bash(git:*)",
+      "Bash(npm run:*)",
+      "Bash(python:*)",
+      "Bash(npx tauri:*)",
+      "Bash(rustc:*)",
+      "Bash(ls -la /c/Users/h4n/Desktop/webappsdesktop/*.md)"
     ]
   }
 }

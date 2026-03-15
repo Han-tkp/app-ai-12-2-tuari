@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { API_BASE } from '../config';
-import { getSafeWorkspaceDir } from '../utils/fsUtils';
+import { getSafeWorkspaceDir, getAutoSaveDir } from '../utils/fsUtils';
 
 // ── Persistence Keys ─────────────────────────────────────────────────────────
 const LS_KEYS = {
@@ -9,11 +9,27 @@ const LS_KEYS = {
   SHELL: 'dd-shell',
   PROJECT: 'dd-current-project',
   AUTO_SAVE: 'dd-autosave-data',
+  AI_CONFIDENCE: 'dd-ai-confidence',
+  OBJECTIVE_LENS: 'dd-objective-lens',
+  TARGET_SIZE: 'dd-target-size',
+  FILTER_MIN: 'dd-filter-min',
+  FILTER_MAX: 'dd-filter-max',
+  ZOOM_WITH_CTRL: 'dd-zoom-with-ctrl',
+  EXCEL_LANGUAGE: 'dd-excel-language',
 };
 
 // ── Restore persisted preferences ────────────────────────────────────────────
 const _storedTheme = (localStorage.getItem(LS_KEYS.THEME) as 'dark' | 'light' | 'warm') || 'dark';
 const _storedShell = (localStorage.getItem(LS_KEYS.SHELL) as 'macos' | 'windows') || 'macos';
+const _storedAnnotationFadeDelay = parseInt(localStorage.getItem('dd-annotation-fade-delay') || '1500', 10);
+const _storedAIConfidence = parseFloat(localStorage.getItem(LS_KEYS.AI_CONFIDENCE) || '0.25');
+const _storedObjectiveLens = (localStorage.getItem(LS_KEYS.OBJECTIVE_LENS) as '4x' | '10x') || '10x';
+const _storedTargetSize = parseInt(localStorage.getItem(LS_KEYS.TARGET_SIZE) || '224', 10);
+const _storedFilterMin = parseFloat(localStorage.getItem(LS_KEYS.FILTER_MIN) || '10');
+const _storedFilterMax = parseFloat(localStorage.getItem(LS_KEYS.FILTER_MAX) || '30');
+const _storedZoomWithCtrl = localStorage.getItem(LS_KEYS.ZOOM_WITH_CTRL) !== 'false';
+const _storedExcelLanguage = (localStorage.getItem(LS_KEYS.EXCEL_LANGUAGE) as 'th' | 'en') || 'th';
+const _storedVideoControlsMode = (localStorage.getItem('dd-video-controls-mode') as 'full' | 'mini') || 'full';
 document.documentElement.classList.add(_storedTheme, `shell-${_storedShell}`);
 
 // ── Auto-Save Constants ──────────────────────────────────────────────────────
@@ -31,6 +47,7 @@ export interface Annotation {
   points?: number[];
   color: string;
   diameter_um: number;
+  detectionId?: number; // AI detection tracker ID (e.g., #3)
 }
 
 export interface Slide {
@@ -55,7 +72,7 @@ interface AppState {
   shell: 'macos' | 'windows';
   isSettingsOpen: boolean;
   settingsPosition: { x: number; y: number };
-  currentSettingsTab: 'AI & Capture' | 'Hardware & Camera' | 'Manual Edit' | 'Appearance & Output';
+  currentSettingsTab: 'AI & Capture' | 'Hardware & Camera' | 'AI Models' | 'Manual Edit' | 'Appearance & Output';
 
   // Auto-Save & Persistence
   isDirty: boolean;           // Flag: has unsaved changes
@@ -73,6 +90,7 @@ interface AppState {
   ramGb: number;
   cpuCores: number;
   inferenceSkip: number;
+  importedMediaPath: string | null; // Path to imported media (image/video)
   
   // Real-time Stats
   vmd: number;
@@ -92,7 +110,17 @@ interface AppState {
   // Session Table (Unified AI + Manual)
   isSessionTablePoppedOut: boolean;
   sessionTablePosition: { x: number; y: number };
-  
+
+  // Video Playback
+  isVideoLoaded: boolean;
+  isVideoPlaying: boolean;
+  videoSpeed: number;
+  videoCurrentFrame: number;
+  videoTotalFrames: number;
+  videoFps: number;
+  videoControlsMode: 'full' | 'mini';
+  videoControlsPosition: { x: number; y: number };
+
   // Report & Slides
   slides: Slide[];
   activeSlideId: string | null;
@@ -113,6 +141,8 @@ interface AppState {
   annotationColor: string;
   snapshotDisplayDuration: number; // seconds to freeze snapshot frame
   snapshotSourceFilter: 'all' | 'ai' | 'manual'; // SessionDropletTable filter
+  annotationFadeDelay: number; // milliseconds before annotation fades (default: 1000)
+  zoomWithCtrl: boolean; // Require Ctrl key for zoom (default: true)
 
   // Actions
   setProjectName: (name: string) => void;
@@ -144,6 +174,7 @@ interface AppState {
   setHotkeySnapshot: (key: string) => void;
   updateInferenceStats: (vmd: number, span: number, count: number, outOfBounds?: number) => void;
   updateStats: (vmd: number, span: number, count: number, outOfBounds: number, ram: string, droplets: { id: number; diameter: number; source: string }[]) => void;
+  setImportedMediaPath: (path: string | null) => void;
 
   // Manual Edit Actions
   addAnnotation: (annotation: Annotation) => void;
@@ -154,9 +185,15 @@ interface AppState {
   setManualEditActive: (active: boolean) => void;
   setManualEditPoppedOut: (popped: boolean) => void;
   setManualEditPosition: (pos: { x: number; y: number }) => void;
+  removeAnnotationVisual: (id: string) => void;
   setActiveTool: (tool: AppState['activeTool']) => void;
   setSessionTablePoppedOut: (popped: boolean) => void;
   setSessionTablePosition: (pos: { x: number; y: number }) => void;
+
+  // Video Actions
+  setVideoState: (state: Partial<Pick<AppState, 'isVideoLoaded' | 'isVideoPlaying' | 'videoSpeed' | 'videoCurrentFrame' | 'videoTotalFrames' | 'videoFps'>>) => void;
+  setVideoControlsMode: (mode: 'full' | 'mini') => void;
+  setVideoControlsPosition: (pos: { x: number; y: number }) => void;
 
   // Slide Management
   addSlide: () => void;
@@ -170,15 +207,19 @@ interface AppState {
   setExcelLanguage: (lang: 'th' | 'en') => void;
   fetchSessionAndAddToSlide: () => Promise<void>;
   resetSession: () => Promise<void>;
+  newProject: (name: string) => Promise<void>;
   triggerSave: () => Promise<void>;
   loadProjectData: (data: ProjectData) => void;
 
   removeSessionDroplet: (id: number) => void;
+  removeSessionDroplets: (ids: number[]) => void;
 
   // UI Actions
   updateAnnotationSettings: (updates: Partial<Pick<AppState, 'lineThickness' | 'fillOpacity' | 'annotationColor'>>) => void;
   setSnapshotDisplayDuration: (duration: number) => void;
   setSnapshotSourceFilter: (filter: 'all' | 'ai' | 'manual') => void;
+  setAnnotationFadeDelay: (delay: number) => void;
+  setZoomWithCtrl: (enabled: boolean) => void;
 }
 
 const initialSlides: Slide[] = [
@@ -210,12 +251,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   isCameraRunning: false,
   cameraIndex: 0,
   isAIRunning: false,
-  objectiveLens: '10x',
+  objectiveLens: _storedObjectiveLens,
   hardwareProfile: 'high',
   profileOverride: 'auto',
   ramGb: 0,
   cpuCores: 0,
   inferenceSkip: 1,
+  importedMediaPath: null,
 
   vmd: 0.00,
   accumulated: 0,
@@ -233,23 +275,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   isSessionTablePoppedOut: false,
   sessionTablePosition: INITIAL_SESSION_TABLE_POS,
 
+  isVideoLoaded: false,
+  isVideoPlaying: false,
+  videoSpeed: 1.0,
+  videoCurrentFrame: 0,
+  videoTotalFrames: 0,
+  videoFps: 30,
+  videoControlsMode: _storedVideoControlsMode,
+  videoControlsPosition: { x: 500, y: 600 },
+
   slides: initialSlides,
   activeSlideId: initialSlides[0].id,
-  targetSize: 224,
-  filterMin: 10.0,
-  filterMax: 30.0,
+  targetSize: _storedTargetSize,
+  filterMin: _storedFilterMin,
+  filterMax: _storedFilterMax,
   exportPath: '',
-  excelLanguage: 'th',  // Default to Thai
+  excelLanguage: _storedExcelLanguage,
 
   hotkeyLiveAI: 'F5',
   hotkeySnapshot: 'Space',
 
-  aiConfidence: 0.25,
+  aiConfidence: _storedAIConfidence,
   lineThickness: 2,
   fillOpacity: 0.2,
   annotationColor: '#00FF00',
   snapshotDisplayDuration: 1.5,
   snapshotSourceFilter: 'all',
+  annotationFadeDelay: _storedAnnotationFadeDelay,
+  zoomWithCtrl: _storedZoomWithCtrl,
 
   setProjectName: (projectName) => { set({ projectName, isDirty: true }); },
   setMode: (mode) => set({ mode }),
@@ -275,18 +328,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearAutoSaveError: () => set({ autoSaveError: null }),
   
   triggerAutoSave: async () => {
-    const { projectName, targetSize, slides, exportPath } = get();
-    
+    const { projectName, targetSize, slides } = get();
+
     // Skip if no changes
     if (!get().isDirty && get().lastAutoSave > 0) {
       return;
     }
 
+    // Only auto-save if there's meaningful data (slides with droplets)
+    const hasData = slides.some((s: Slide) => s.droplets.length > 0);
+
     try {
-      const savePath = exportPath || await getSafeWorkspaceDir();
-      const autosaveDir = `${savePath}/.autosave`;
-      
-      // Create autosave directory payload
       const autosaveData = {
         project_name: projectName,
         target_size: targetSize,
@@ -294,51 +346,48 @@ export const useAppStore = create<AppState>((set, get) => ({
         timestamp: Date.now(),
       };
 
-      // Save to localStorage as backup (for crash recovery)
+      // Always save to localStorage (fast, local)
       try {
         localStorage.setItem(LS_KEYS.AUTO_SAVE, JSON.stringify(autosaveData));
       } catch (lsError) {
-        // localStorage full (quota exceeded)
-        console.warn('[Auto-Save] localStorage full, using disk only:', lsError);
-        // Continue with disk save anyway
+        console.warn('[Auto-Save] localStorage full:', lsError);
       }
 
-      // Also save to disk via backend (silent, no alert)
-      const payload = {
-        project_name: `${projectName}_autosave_${Date.now()}`,
-        target_size: targetSize,
-        save_directory: autosaveDir,
-        slides: autosaveData.slides,
-      };
+      // Only call backend if there's actual slide data to persist
+      if (hasData) {
+        const autosaveDir = await getAutoSaveDir();
+        const projectAutoSaveDir = `${autosaveDir}/${projectName}`;
 
-      const response = await fetch(`${API_BASE}/api/save-project`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+        const payload = {
+          project_name: `${projectName}_autosave_${Date.now()}`,
+          target_size: targetSize,
+          save_directory: projectAutoSaveDir,
+          slides: autosaveData.slides,
+          isAutoSave: true,
+        };
 
-      if (response.ok) {
-        set({ lastAutoSave: Date.now(), autoSaveError: null });
-        console.log('[Auto-Save] Success:', new Date().toISOString());
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.detail || 'Unknown error';
-        
-        // Check for disk full error
-        if (errorMsg.includes('disk') || errorMsg.includes('space') || errorMsg.includes('No space left')) {
-          set({ autoSaveError: 'Auto-save failed: Disk is full' });
-        } else {
-          set({ autoSaveError: 'Auto-save failed: ' + errorMsg });
+        const response = await fetch(`${API_BASE}/api/save-project`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMsg = errorData.detail || 'Unknown error';
+          if (errorMsg.includes('disk') || errorMsg.includes('space')) {
+            set({ autoSaveError: 'Auto-save failed: Disk is full' });
+          }
+          throw new Error(errorMsg);
         }
-        throw new Error(errorMsg);
       }
+
+      set({ lastAutoSave: Date.now(), isDirty: false, autoSaveError: null });
     } catch (error) {
       console.error('[Auto-Save] Error:', error);
-      // Don't set error state if it's a network error (backend might be offline)
       if ((error as Error).message !== 'Failed to fetch') {
         set({ autoSaveError: 'Auto-save failed: ' + (error as Error).message });
       }
-      // Don't alert user during auto-save, just log
     }
   },
 
@@ -388,11 +437,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ lastAutoSave: 0, autoSaveError: null });
   },
 
-  toggleCamera: () => set((state) => ({ isCameraRunning: !state.isCameraRunning, isAIRunning: false, isDirty: true })),
+  toggleCamera: () => set((state) => ({
+    isCameraRunning: !state.isCameraRunning,
+    isAIRunning: false,
+    isDirty: true,
+    // Clear imported media & video when starting camera
+    importedMediaPath: !state.isCameraRunning ? null : state.importedMediaPath,
+    isVideoLoaded: !state.isCameraRunning ? false : state.isVideoLoaded,
+    isVideoPlaying: !state.isCameraRunning ? false : state.isVideoPlaying,
+  })),
   switchCamera: () => set((state) => ({ cameraIndex: (state.cameraIndex + 1) % 6 })),
   setAIRunning: (isAIRunning) => set({ isAIRunning, isDirty: true }),
-  setObjectiveLens: (lens) => set({ objectiveLens: lens, isDirty: true }),
-  setAIConfidence: (aiConfidence) => set({ aiConfidence, isDirty: true }),
+  setObjectiveLens: (lens) => {
+    set({ objectiveLens: lens, isDirty: true });
+    localStorage.setItem(LS_KEYS.OBJECTIVE_LENS, lens);
+  },
+  setAIConfidence: (aiConfidence) => {
+    set({ aiConfidence, isDirty: true });
+    localStorage.setItem(LS_KEYS.AI_CONFIDENCE, String(aiConfidence));
+  },
   setHardwareInfo: (info) => set({
     hardwareProfile: info.profile,
     ramGb: info.ram_gb,
@@ -407,6 +470,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setHotkeyLiveAI: (hotkeyLiveAI) => set({ hotkeyLiveAI }),
   setHotkeySnapshot: (hotkeySnapshot) => set({ hotkeySnapshot }),
+  setImportedMediaPath: (importedMediaPath) => set({ importedMediaPath }),
   updateInferenceStats: (vmd, span, count, outOfBounds) => set({
     vmd, span, accumulated: count, outOfBounds: outOfBounds ?? 0
   }),
@@ -417,6 +481,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   addAnnotation: (ann) => {
     set((state) => ({ annotations: [...state.annotations, ann], isDirty: true }));
     get().syncManualAnnotations();
+    // Auto-fade visual overlay after delay (session data persists)
+    const delay = get().annotationFadeDelay;
+    if (delay > 0) {
+      setTimeout(() => {
+        get().removeAnnotationVisual(ann.id);
+      }, delay);
+    }
   },
   updateAnnotation: (id, updates) => {
     set((state) => ({
@@ -434,8 +505,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().syncManualAnnotations();
   },
   syncManualAnnotations: async () => {
-    const { annotations } = get();
-    const manualData = annotations.filter(a => a.type !== 'line').map(a => a.diameter_um);
+    const { annotations, currentSessionDroplets } = get();
+    // Sync all manual annotations (including line measurements)
+    // Exclude AI-detected annotations (they're already in backend droplet_data)
+    const manualAnns = annotations.filter(a => !a.detectionId);
+    const manualData = manualAnns.map(a => a.diameter_um);
+
+    // Update local session droplets: keep AI/detection entries, rebuild manual entries
+    const nonManualDroplets = currentSessionDroplets.filter(d => d.source !== 'Manual');
+    const manualDroplets = manualAnns.map((a, i) => ({
+      id: -(i + 1000),
+      diameter: a.diameter_um,
+      source: 'Manual' as string,
+    }));
+    set({ currentSessionDroplets: [...nonManualDroplets, ...manualDroplets] });
+
     try {
       await fetch(`${API_BASE}/api/update-manual-data`, {
         method: 'POST',
@@ -446,12 +530,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('Manual annotation sync failed:', err);
     }
   },
+  removeAnnotationVisual: (id) => {
+    set((state) => ({
+      annotations: state.annotations.filter(a => a.id !== id),
+    }));
+    // Does NOT call syncManualAnnotations — session data persists
+  },
   setManualEditActive: (isManualEditActive) => set({ isManualEditActive }),
   setManualEditPoppedOut: (isManualEditPoppedOut) => set({ isManualEditPoppedOut }),
   setManualEditPosition: (manualEditPosition) => set({ manualEditPosition }),
   setActiveTool: (activeTool) => set({ activeTool }),
   setSessionTablePoppedOut: (isSessionTablePoppedOut) => set({ isSessionTablePoppedOut }),
   setSessionTablePosition: (sessionTablePosition) => set({ sessionTablePosition }),
+
+  setVideoState: (updates) => set(updates),
+  setVideoControlsMode: (videoControlsMode) => {
+    set({ videoControlsMode });
+    localStorage.setItem('dd-video-controls-mode', videoControlsMode);
+  },
+  setVideoControlsPosition: (videoControlsPosition) => set({ videoControlsPosition }),
 
   addSlide: () => set((state) => {
     const newSlide: Slide = { id: uuidv4(), name: `Slide ${state.slides.length + 1}`, droplets: [], status: 'Pending', timestamp: '' };
@@ -473,14 +570,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     mode: 'Analyze',
     isDirty: true
   })),
-  setTargetSize: (targetSize) => set({ targetSize, isDirty: true }),
-  setFilterRange: (filterMin, filterMax) => set({ filterMin, filterMax, isDirty: true }),
+  setTargetSize: (targetSize) => {
+    set({ targetSize, isDirty: true });
+    localStorage.setItem(LS_KEYS.TARGET_SIZE, String(targetSize));
+  },
+  setFilterRange: (filterMin, filterMax) => {
+    set({ filterMin, filterMax, isDirty: true });
+    localStorage.setItem(LS_KEYS.FILTER_MIN, String(filterMin));
+    localStorage.setItem(LS_KEYS.FILTER_MAX, String(filterMax));
+  },
   setExportPath: (exportPath) => set({ exportPath }),
   setExcelLanguage: (excelLanguage) => set({ excelLanguage }),
   fetchSessionAndAddToSlide: async () => {
     const { activeSlideId, filterMin, filterMax, targetSize } = get();
     if (!activeSlideId) {
-      alert("Please select a slide first.");
+      console.warn('[AddToSlide] No slide selected');
       return;
     }
     try {
@@ -498,7 +602,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (sampled.length === 0 && rawData.length > 0) {
-        alert(`No droplets were added. All ${rawData.length} droplets were outside the filter range (${filterMin}–${filterMax} µm).`);
+        console.warn(`[AddToSlide] All ${rawData.length} droplets outside filter range (${filterMin}–${filterMax} µm)`);
         return;
       }
 
@@ -514,10 +618,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
 
       await fetch(`${API_BASE}/api/reset-stats`, { method: 'POST' });
-      alert(`Successfully added ${sampled.length} droplets to slide.`);
+      console.log(`[AddToSlide] Added ${sampled.length} droplets to slide`);
     } catch (err) {
       console.error('Fetch session error:', err);
-      alert('Error connecting to backend.');
     }
   },
   loadProjectData: (data: ProjectData) => set({
@@ -535,6 +638,48 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       console.error('Failed to reset backend stats:', err);
     }
+  },
+
+  newProject: async (name: string) => {
+    const freshSlides: Slide[] = [
+      { id: uuidv4(), name: 'Slide 1', droplets: [], status: 'Pending', timestamp: '' },
+      { id: uuidv4(), name: 'Slide 2', droplets: [], status: 'Pending', timestamp: '' },
+      { id: uuidv4(), name: 'Slide 3', droplets: [], status: 'Pending', timestamp: '' },
+    ];
+    // Reset ALL state to fresh
+    set({
+      projectName: name,
+      mode: 'Analyze',
+      // Detection data
+      vmd: 0, span: 0, accumulated: 0, outOfBounds: 0,
+      currentSessionDroplets: [],
+      annotations: [],
+      // Slides
+      slides: freshSlides,
+      activeSlideId: freshSlides[0].id,
+      // Media & Camera & Video
+      importedMediaPath: null,
+      isAIRunning: false,
+      isCameraRunning: false,
+      isVideoLoaded: false,
+      isVideoPlaying: false,
+      videoCurrentFrame: 0,
+      videoTotalFrames: 0,
+      // Persistence
+      isDirty: false,
+    });
+    // Reset backend: tracker, counted_ids, droplet_data
+    try {
+      await fetch(`${API_BASE}/api/reset-stats`, { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to reset backend stats:', err);
+    }
+    // Close any open video on backend
+    window.dispatchEvent(new CustomEvent('send-backend-command', {
+      detail: { action: 'close_video' }
+    }));
+    // Clear auto-save
+    get().clearAutoSave();
   },
 
   triggerSave: async () => {
@@ -562,19 +707,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Clear dirty flag and auto-save on successful manual save
         get().clearAutoSave();
         set({ isDirty: false });
-        
+
         // Cleanup old autosave files (silent, non-blocking)
         fetch(`${API_BASE}/api/cleanup-autosave?project_name=${encodeURIComponent(projectName)}`, {
           method: 'POST'
-        }).catch(() => {}); // Ignore cleanup errors
-        
-        alert(`Project saved to: ${result.drop_file}\nExcel Report: ${result.excel_file}`);
+        }).catch(() => {});
+
+        console.log(`[Save] Project saved: ${result.drop_file}`);
       } else {
-        alert('Failed to save project.');
+        console.error('[Save] Failed to save project');
       }
     } catch (error) {
-      console.error('Failed to save project:', error);
-      alert('Error connecting to backend for save.');
+      console.error('[Save] Error:', error);
     }
   },
 
@@ -582,7 +726,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (id < 0) {
       // Manual: map backend ID -(1000+i) → annotation index i
       const annIdx = Math.abs(id) - 1000;
-      const manualAnns = get().annotations.filter(a => a.type !== 'line');
+      const manualAnns = get().annotations.filter(a => !a.detectionId);
       const ann = manualAnns[annIdx];
       if (ann) get().deleteAnnotation(ann.id);
     } else {
@@ -596,7 +740,54 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  removeSessionDroplets: (ids) => {
+    const manualIds = ids.filter(id => id < 0);
+    const aiIds = ids.filter(id => id >= 0);
+
+    // Collect manual annotation UUIDs FIRST (before any state mutation shifts indices)
+    const manualAnns = get().annotations.filter(a => !a.detectionId);
+    const annUUIDsToDelete = manualIds
+      .map(id => {
+        const annIdx = Math.abs(id) - 1000;
+        return manualAnns[annIdx]?.id;
+      })
+      .filter(Boolean) as string[];
+
+    // Remove manual annotations in a single state update (no N×syncManualAnnotations)
+    if (annUUIDsToDelete.length > 0) {
+      const uuidSet = new Set(annUUIDsToDelete);
+      set(state => ({
+        annotations: state.annotations.filter(a => !uuidSet.has(a.id)),
+        isDirty: true,
+      }));
+    }
+
+    // Remove AI droplets — send each to backend
+    aiIds.forEach(id => {
+      window.dispatchEvent(new CustomEvent('send-backend-command', {
+        detail: { action: 'remove_droplet', id }
+      }));
+    });
+
+    // Remove all from local session droplets
+    const idSet = new Set(ids);
+    set(state => ({
+      currentSessionDroplets: state.currentSessionDroplets.filter(d => !idSet.has(d.id))
+    }));
+
+    // Sync manual data to backend once (not per-annotation)
+    get().syncManualAnnotations();
+  },
+
   updateAnnotationSettings: (updates) => set((state) => ({ ...state, ...updates })),
   setSnapshotDisplayDuration: (snapshotDisplayDuration) => set({ snapshotDisplayDuration }),
   setSnapshotSourceFilter: (snapshotSourceFilter) => set({ snapshotSourceFilter }),
+  setAnnotationFadeDelay: (annotationFadeDelay) => {
+    set({ annotationFadeDelay });
+    localStorage.setItem('dd-annotation-fade-delay', String(annotationFadeDelay));
+  },
+  setZoomWithCtrl: (zoomWithCtrl) => {
+    set({ zoomWithCtrl });
+    localStorage.setItem(LS_KEYS.ZOOM_WITH_CTRL, String(zoomWithCtrl));
+  },
 }));

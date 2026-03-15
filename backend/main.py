@@ -26,6 +26,40 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# ── Configure Logging ────────────────────────────────────────────────────────
+def setup_logging():
+    """Setup logging to file and console."""
+    from pathlib import Path
+    
+    # Create logs directory
+    logs_dir = Path.home() / "Documents" / "DropDetect_Workspace" / "Logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Log file path
+    log_file = logs_dir / "dropdetect.log"
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            # File handler - write to file
+            logging.FileHandler(log_file, encoding='utf-8'),
+            # Console handler - write to console
+            logging.StreamHandler()
+        ]
+    )
+    
+    logger = logging.getLogger("dropdetect")
+    logger.info(f"DropDetect AI started - Log file: {log_file}")
+    logger.info(f"Python version: {os.sys.version}")
+    logger.info(f"Working directory: {os.getcwd()}")
+    
+    return logger
+
+# Initialize logging
+logger = setup_logging()
+
 # Single-threaded executor: ONNX inference runs here, off the event loop
 _inference_executor = ThreadPoolExecutor(max_workers=1)
 
@@ -175,6 +209,7 @@ class SaveProjectRequest(BaseModel):
     save_directory: str
     slides: list[SlideData]
     language: str = "th"  # 'th' or 'en'
+    isAutoSave: bool = False  # Flag for auto-save requests
 
 class ManualDataRequest(BaseModel):
     data: list[float] = []
@@ -193,6 +228,7 @@ class DropletSystem:
         self.is_ai_active = False
         self.inference_skip = PROFILE_SKIP[self.profile]
         self.frame_counter = 0
+        self.imported_media_path: str | None = None  # Path to imported media
         self.load_resources("10x")
         logger.info("DropletSystem init — profile=%s  RAM=%.1f GB  skip=1/%d",
                     self.profile,
@@ -566,17 +602,40 @@ async def cleanup_autosave(project_name: str):
 async def save_project(req: SaveProjectRequest):
     import shutil
     from pathlib import Path
-    
-    project_base = os.path.join(req.save_directory, req.project_name)
-    excel_path   = f"{project_base}_Report.xlsx"
-    drop_path    = f"{project_base}.drop"
 
-    os.makedirs(req.save_directory, exist_ok=True)
+    # Use safe workspace paths
+    workspace_dir = Path.home() / "Documents" / "DropDetect_Workspace"
+    projects_dir = workspace_dir / "Projects"
+    excel_dir = workspace_dir / "Exports" / "Excel"
+    autosave_dir = workspace_dir / "AutoSave"
     
+    # Check if this is an auto-save request
+    is_auto_save = hasattr(req, 'isAutoSave') and req.isAutoSave
+
+    # Create directories if they don't exist
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    excel_dir.mkdir(parents=True, exist_ok=True)
+    autosave_dir.mkdir(parents=True, exist_ok=True)
+
+    if is_auto_save:
+        # Auto-save: Save in AutoSave/{project_name}/
+        project_autosave_dir = autosave_dir / req.project_name
+        project_autosave_dir.mkdir(parents=True, exist_ok=True)
+        project_base = project_autosave_dir / req.project_name
+        drop_path = f"{project_base}.drop"
+        # Auto-save doesn't need Excel, just .drop file
+        excel_path = None
+    else:
+        # Manual save: Save in Projects/ and Exports/Excel/
+        project_base = projects_dir / req.project_name
+        excel_path = excel_dir / f"{req.project_name}_Report.xlsx"
+        drop_path = f"{project_base}.drop"
+
     try:
-        # Build Excel with language setting (default Thai)
-        lang = req.language if hasattr(req, 'language') else 'th'
-        _build_excel(req, excel_path, lang=lang)
+        # Build Excel only for manual saves (not auto-save)
+        if excel_path and not is_auto_save:
+            lang = req.language if hasattr(req, 'language') else 'th'
+            _build_excel(req, str(excel_path), lang=lang)
     except PermissionError as e:
         logger.error(f"Excel file is locked: {e}")
         raise HTTPException(status_code=409, detail="Excel file is currently in use. Please close it and try again.")
@@ -588,16 +647,23 @@ async def save_project(req: SaveProjectRequest):
         # Create .drop file (ZIP) with file share mode
         with zipfile.ZipFile(drop_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             zipf.writestr("project.json", req.model_dump_json(indent=4))
-            # Add Excel with error handling for file locks
-            try:
-                zipf.write(excel_path, arcname=os.path.basename(excel_path))
-            except PermissionError:
-                logger.warning("Could not add Excel to ZIP (file locked), continuing with JSON only")
+            # Add Excel only for manual saves
+            if excel_path and excel_path.exists():
+                try:
+                    zipf.write(str(excel_path), arcname=excel_path.name)
+                except PermissionError:
+                    logger.warning("Could not add Excel to ZIP (file locked), continuing with JSON only")
     except Exception as e:
         logger.error(f"Failed to create .drop file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create project file: {str(e)}")
 
-    return {"status": "success", "excel_file": excel_path, "drop_file": drop_path}
+    return {
+        "status": "success",
+        "excel_file": str(excel_path) if excel_path else None,
+        "drop_file": drop_path,
+        "workspace_dir": str(workspace_dir),
+        "is_auto_save": is_auto_save
+    }
 
 @app.get("/api/load-project")
 async def load_project(path: str):
@@ -626,14 +692,33 @@ async def reset_stats():
     system.reset_stats()
     return {"status": "success"}
 
+@app.post("/api/log-error")
+async def log_error(data: dict):
+    logger.error("Frontend error: %s | Stack: %s", data.get("error", "unknown"), data.get("stack", ""))
+    return {"status": "logged"}
+
 @app.websocket("/ws/stream")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
+    # Safe send helper — silently fails if WS is closed
+    ws_alive = True
+
+    async def safe_send(data: dict):
+        nonlocal ws_alive
+        if not ws_alive:
+            return False
+        try:
+            await websocket.send_json(data)
+            return True
+        except (WebSocketDisconnect, RuntimeError, Exception):
+            ws_alive = False
+            return False
+
     # Announce hardware info immediately on connect
     ram_gb = psutil.virtual_memory().total / (1024 ** 3)
     cpu_cores = psutil.cpu_count(logical=False) or 1
-    await websocket.send_json({
+    await safe_send({
         "type": "hardware_info",
         "profile": system.profile,
         "ram_gb": round(ram_gb, 1),
@@ -642,27 +727,78 @@ async def websocket_endpoint(websocket: WebSocket):
     })
 
     camera_idx = 0
-    cap = open_camera(camera_idx)
+    cap = None  # Don't open camera on connect — wait for start_camera command
+    camera_active = False
+    imported_frame = None  # Holds the current imported image frame (numpy array)
+
+    # Video playback state
+    video_cap = None       # cv2.VideoCapture for video file
+    video_playing = False
+    video_speed = 1.0      # 0.25, 0.5, 1.0, 2.0
+    video_fps = 30.0
+    video_total_frames = 0
+    video_current_frame = 0
+    video_path = None
+
     box_annotator = sv.BoxAnnotator(color=sv.ColorPalette.from_hex(["#0a84ff", "#ff3b30"]), thickness=2)
     label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(["#0a84ff", "#ff3b30"]), text_padding=4, text_scale=0.5)
     loop = asyncio.get_running_loop()
 
     async def handle_commands():
-        nonlocal camera_idx, cap
+        nonlocal camera_idx, cap, camera_active, imported_frame, ws_alive, video_cap, video_playing, video_speed, video_fps, video_total_frames, video_current_frame, video_path
         try:
-            while True:
+            while ws_alive:
                 msg = await websocket.receive_json()
                 action = msg.get("action")
-                if action == "set_camera":
+                if action == "start_camera":
+                    idx = int(msg.get("index", camera_idx))
+                    camera_idx = idx
+                    if cap is not None:
+                        cap.release()
+                    cap = open_camera(camera_idx)
+                    camera_active = True
+                    imported_frame = None  # Clear imported frame when camera starts
+                    # Stop video playback when camera starts
+                    video_playing = False
+                    if video_cap is not None:
+                        video_cap.release()
+                        video_cap = None
+                    video_path = None
+                    logger.info(f"Camera {camera_idx} started")
+                    await safe_send({"type": "camera_status", "status": "started", "index": camera_idx})
+                elif action == "stop_camera":
+                    camera_active = False
+                    if cap is not None:
+                        cap.release()
+                        cap = None
+                    logger.info("Camera stopped")
+                    await safe_send({"type": "camera_status", "status": "stopped"})
+                elif action == "set_camera":
                     idx = int(msg.get("index", 0))
                     if idx != camera_idx:
                         camera_idx = idx
-                        cap.release()
-                        cap = open_camera(camera_idx)
+                        if cap is not None:
+                            cap.release()
+                        if camera_active:
+                            cap = open_camera(camera_idx)
                 elif action == "set_lens":
                     system.load_resources(msg.get("lens"))
                 elif action == "update_settings":
                     system.conf_threshold = float(msg.get("conf", 0.25))
+                elif action == "set_imported_media":
+                    # Set imported media path and load frame for AI processing
+                    media_path = msg.get("path")
+                    system.imported_media_path = media_path
+                    if media_path:
+                        img = cv2.imread(str(media_path))
+                        if img is not None:
+                            # Resize to 640x480 for consistency with camera frames
+                            imported_frame = cv2.resize(img, (640, 480))
+                            logger.info(f"Imported media loaded for AI: {media_path} -> {imported_frame.shape}")
+                        else:
+                            logger.warning(f"Failed to load imported media: {media_path}")
+                    else:
+                        imported_frame = None
                 elif action == "reset_stats":
                     system.reset_stats()
                 elif action == "take_snapshot":
@@ -674,8 +810,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if profile == "auto":
                         profile = detect_profile()
                     system.set_profile(profile)
-                    # Notify frontend of the new active profile
-                    await websocket.send_json({
+                    await safe_send({
                         "type": "hardware_info",
                         "profile": system.profile,
                         "ram_gb": round(ram_gb, 1),
@@ -686,12 +821,28 @@ async def websocket_endpoint(websocket: WebSocket):
                     droplet_id = int(msg.get("id", 0))
                     system.droplet_data.pop(droplet_id, None)
                     system.counted_ids.discard(droplet_id)
-                elif action == "export_excel":
+                elif action == "export_snapshot":
+                    # Export current frame as image
                     from pathlib import Path
-                    docs = Path.home() / "Documents" / "DropDetect_Projects"
+
+                    docs = Path.home() / "Documents" / "DropDetect_Workspace" / "Exports" / "Snapshots"
                     docs.mkdir(parents=True, exist_ok=True)
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    excel_path = docs / f"DropDetect_QuickExport_{timestamp}.xlsx"
+                    snapshot_path = docs / f"Snapshot_{timestamp}.jpg"
+
+                    if 'frame' in locals() and frame is not None:
+                        cv2.imwrite(str(snapshot_path), frame)
+                        logger.info(f"Snapshot saved: {snapshot_path}")
+                        await safe_send({"action": "snapshot_exported", "path": str(snapshot_path)})
+                    else:
+                        await safe_send({"action": "snapshot_export_error", "error": "No frame available"})
+                elif action == "quick_export":
+                    # Quick export: Session data only (no slides)
+                    from pathlib import Path
+                    docs = Path.home() / "Documents" / "DropDetect_Workspace" / "Exports" / "QuickExports"
+                    docs.mkdir(parents=True, exist_ok=True)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    excel_path = docs / f"Quick_{timestamp}.xlsx"
                     lang = msg.get("language", "th")
 
                     slide_data = SlideData(
@@ -709,35 +860,413 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
 
                     _build_excel(req, str(excel_path), lang=lang)
+                    logger.info(f"Quick export saved: {excel_path}")
 
-                    await websocket.send_json({
+                    await safe_send({
                         "action": "export_result",
-                        "path": str(excel_path)
+                        "path": str(excel_path),
+                        "type": "quick"
                     })
+                elif action == "export_excel":
+                    # Full export: All slides
+                    from pathlib import Path
+                    docs = Path.home() / "Documents" / "DropDetect_Workspace" / "Exports" / "Excel"
+                    docs.mkdir(parents=True, exist_ok=True)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    excel_path = docs / f"FullExport_{timestamp}.xlsx"
+                    lang = msg.get("language", "th")
+
+                    # Get current session data
+                    slide_data = SlideData(
+                        id="full_export",
+                        name=f"Session {timestamp}",
+                        droplets=[float(v) for v in system.droplet_data.values()]
+                    )
+
+                    req = SaveProjectRequest(
+                        project_name=f"FullExport_{timestamp}",
+                        target_size=224,
+                        save_directory=str(docs),
+                        slides=[slide_data],
+                        language=lang,
+                    )
+
+                    _build_excel(req, str(excel_path), lang=lang)
+                    logger.info(f"Full export saved: {excel_path}")
+
+                    await safe_send({
+                        "action": "export_result",
+                        "path": str(excel_path),
+                        "type": "full"
+                    })
+                elif action == "detect_roi":
+                    # AI-assisted manual detection: run inference, check ROI
+                    roi_x = float(msg.get("x", 0))
+                    roi_y = float(msg.get("y", 0))
+                    roi_w = float(msg.get("width", 0))
+                    roi_h = float(msg.get("height", 0))
+
+                    # Get current frame
+                    detect_frame = None
+                    if imported_frame is not None:
+                        detect_frame = imported_frame.copy()
+                    elif camera_active and cap is not None:
+                        ret, detect_frame = cap.read()
+                        if not ret:
+                            detect_frame = None
+
+                    if detect_frame is None or system.session is None:
+                        await safe_send({
+                            "action": "detect_roi_result",
+                            "found": False,
+                            "message": "No frame or AI model available"
+                        })
+                    else:
+                        # Run inference (same as main loop)
+                        pad = np.zeros((640, 640, 3), dtype=np.uint8)
+                        pad[PAD_TOP:PAD_TOP + 480, :] = detect_frame
+                        img_input = pad.astype(np.float32) / 255.0
+                        img_input = np.expand_dims(np.transpose(img_input, (2, 0, 1)), axis=0)
+
+                        _inp = img_input
+                        outputs = await loop.run_in_executor(
+                            _inference_executor,
+                            lambda: system.session.run(None, {system.input_name: _inp})
+                        )
+
+                        preds = np.squeeze(outputs[0]).T
+                        conf_mask = preds[:, 4] > system.conf_threshold
+                        valid = preds[conf_mask]
+
+                        # Normalize ROI bounds
+                        rx1 = min(roi_x, roi_x + roi_w)
+                        ry1 = min(roi_y, roi_y + roi_h)
+                        rx2 = max(roi_x, roi_x + roi_w)
+                        ry2 = max(roi_y, roi_y + roi_h)
+
+                        found_droplets = []
+                        if len(valid) > 0:
+                            xyxy = np.zeros((len(valid), 4), dtype=np.float32)
+                            xyxy[:, 0] = valid[:, 0] - valid[:, 2] / 2
+                            xyxy[:, 1] = valid[:, 1] - valid[:, 3] / 2 - PAD_TOP
+                            xyxy[:, 2] = valid[:, 0] + valid[:, 2] / 2
+                            xyxy[:, 3] = valid[:, 1] + valid[:, 3] / 2 - PAD_TOP
+
+                            detections = sv.Detections(
+                                xyxy=xyxy,
+                                confidence=valid[:, 4],
+                                class_id=np.zeros(len(valid), dtype=int)
+                            )
+                            detections = detections.with_nms(threshold=0.5)
+
+                            for i in range(len(detections.xyxy)):
+                                box = detections.xyxy[i]
+                                cx = float((box[0] + box[2]) / 2)
+                                cy = float((box[1] + box[3]) / 2)
+
+                                if rx1 <= cx <= rx2 and ry1 <= cy <= ry2:
+                                    px_avg = ((box[2] - box[0]) + (box[3] - box[1])) / 2
+                                    crater_um = float(px_avg) * system.calibration_value * 1e6
+                                    sf = 0.86 if crater_um > 20 else 0.80 if crater_um >= 15 else 0.75 if crater_um >= 10 else 0.70
+                                    true_diam = crater_um * sf
+
+                                    # Assign new ID continuing from max existing
+                                    pos_ids = [k for k in system.droplet_data.keys() if k >= 0]
+                                    new_id = max(pos_ids + [0]) + 1
+
+                                    system.droplet_data[new_id] = float(true_diam)
+                                    system.counted_ids.add(new_id)
+
+                                    found_droplets.append({
+                                        "id": int(new_id),
+                                        "diameter": float(true_diam),
+                                        "cx": cx,
+                                        "cy": cy,
+                                        "box": [float(box[0]), float(box[1]), float(box[2]), float(box[3])]
+                                    })
+
+                        if found_droplets:
+                            # Calculate updated stats
+                            vmd, span, count, _, out_pct = system.calculate_stats()
+                            unified_list = []
+                            for tid, diam in system.droplet_data.items():
+                                unified_list.append({
+                                    "id": int(tid),
+                                    "diameter": float(diam),
+                                    "source": "Manual" if tid < 0 else "AI"
+                                })
+                            unified_list.sort(key=lambda x: abs(x["id"]))
+
+                            await safe_send({
+                                "action": "detect_roi_result",
+                                "found": True,
+                                "droplets": found_droplets,
+                                "vmd": float(vmd),
+                                "span": float(span),
+                                "count": int(count),
+                                "out_of_bounds": float(out_pct),
+                                "session_droplets": unified_list
+                            })
+                            logger.info(f"detect_roi: found {len(found_droplets)} droplets in ROI")
+                        else:
+                            await safe_send({
+                                "action": "detect_roi_result",
+                                "found": False,
+                                "message": "ไม่ตรวจพบ droplet ในบริเวณที่เลือก"
+                            })
+
+                elif action == "import_media":
+                    # Handle image/video import
+                    media_type = msg.get("type", "image")
+                    media_path = msg.get("path", "")
+
+                    logger.info(f"Importing {media_type}: {media_path}")
+
+                    try:
+                        if media_type == "image":
+                            # Close any open video when importing an image
+                            video_playing = False
+                            if video_cap is not None:
+                                video_cap.release()
+                                video_cap = None
+                            video_path = None
+                            img = cv2.imread(str(media_path))
+                            if img is not None:
+                                logger.info(f"Image loaded: {img.shape}")
+                                imported_frame = cv2.resize(img, (640, 480))
+                                system.imported_media_path = media_path
+                                # Resize for sending (avoid huge payloads)
+                                send_img = cv2.resize(img, (min(img.shape[1], 1280), min(img.shape[0], 960)))
+                                _, buffer = cv2.imencode('.jpg', send_img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                                image_base64 = base64.b64encode(buffer).decode('utf-8')
+
+                                await safe_send({
+                                    "action": "media_imported",
+                                    "type": media_type,
+                                    "path": str(media_path),
+                                    "status": "success",
+                                    "image": image_base64,
+                                    "width": img.shape[1],
+                                    "height": img.shape[0]
+                                })
+                            else:
+                                raise Exception(f"Failed to load image: {media_path}")
+
+                        elif media_type == "video":
+                            # Close any previous video
+                            if video_cap is not None:
+                                video_cap.release()
+                                video_cap = None
+
+                            vid_cap = cv2.VideoCapture(str(media_path))
+                            if vid_cap.isOpened():
+                                ret, vid_frame = vid_cap.read()
+                                video_total_frames = int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                                video_fps = vid_cap.get(cv2.CAP_PROP_FPS) or 30.0
+                                # Reset to frame 0 for playback
+                                vid_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+                                if ret and vid_frame is not None:
+                                    logger.info(f"Video loaded: {video_total_frames} frames @ {video_fps:.1f} FPS, {vid_frame.shape}")
+                                    imported_frame = cv2.resize(vid_frame, (640, 480))
+                                    system.imported_media_path = media_path
+                                    # Keep capture open for playback
+                                    video_cap = vid_cap
+                                    video_path = media_path
+                                    video_current_frame = 0
+                                    video_playing = False
+                                    video_speed = 1.0
+
+                                    send_img = cv2.resize(vid_frame, (min(vid_frame.shape[1], 1280), min(vid_frame.shape[0], 960)))
+                                    _, buffer = cv2.imencode('.jpg', send_img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                                    image_base64 = base64.b64encode(buffer).decode('utf-8')
+
+                                    await safe_send({
+                                        "action": "media_imported",
+                                        "type": media_type,
+                                        "path": str(media_path),
+                                        "status": "success",
+                                        "image": image_base64,
+                                        "width": vid_frame.shape[1],
+                                        "height": vid_frame.shape[0],
+                                        "total_frames": int(video_total_frames),
+                                        "fps": float(video_fps),
+                                        "is_video": True,
+                                    })
+                                else:
+                                    vid_cap.release()
+                                    raise Exception("Failed to read video frame")
+                            else:
+                                raise Exception(f"Failed to open video: {media_path}")
+
+                    except (WebSocketDisconnect, RuntimeError):
+                        ws_alive = False
+                    except Exception as e:
+                        logger.error(f"Import failed: {e}")
+                        await safe_send({
+                            "action": "import_error",
+                            "error": str(e)
+                        })
+
+                # ── Video Playback Commands ──────────────────────────────
+                elif action == "video_play":
+                    if video_cap is not None:
+                        video_playing = True
+                        logger.info(f"Video play at {video_speed}x")
+                elif action == "video_pause":
+                    video_playing = False
+                    logger.info("Video paused")
+                elif action == "video_set_speed":
+                    video_speed = max(0.1, min(4.0, float(msg.get("speed", 1.0))))
+                    logger.info(f"Video speed: {video_speed}x")
+                elif action == "video_seek":
+                    offset = int(msg.get("offset", 0))
+                    if video_cap is not None and video_total_frames > 0:
+                        new_pos = max(0, min(video_current_frame + offset, video_total_frames - 1))
+                        video_cap.set(cv2.CAP_PROP_POS_FRAMES, new_pos)
+                        ret, seek_frame = video_cap.read()
+                        if ret:
+                            video_current_frame = int(video_cap.get(cv2.CAP_PROP_POS_FRAMES))
+                            imported_frame = cv2.resize(seek_frame, (640, 480))
+                            _, buffer = cv2.imencode('.jpg', imported_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                            await safe_send({
+                                "action": "video_frame",
+                                "image": base64.b64encode(buffer).decode('utf-8'),
+                                "video_progress": {
+                                    "current_frame": int(video_current_frame),
+                                    "total_frames": int(video_total_frames),
+                                    "is_playing": video_playing,
+                                    "speed": float(video_speed),
+                                    "fps": float(video_fps),
+                                }
+                            })
+                elif action == "video_seek_to":
+                    frame_pos = int(msg.get("frame", 0))
+                    if video_cap is not None and video_total_frames > 0:
+                        frame_pos = max(0, min(frame_pos, video_total_frames - 1))
+                        video_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
+                        ret, seek_frame = video_cap.read()
+                        if ret:
+                            video_current_frame = int(video_cap.get(cv2.CAP_PROP_POS_FRAMES))
+                            imported_frame = cv2.resize(seek_frame, (640, 480))
+                            _, buffer = cv2.imencode('.jpg', imported_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                            await safe_send({
+                                "action": "video_frame",
+                                "image": base64.b64encode(buffer).decode('utf-8'),
+                                "video_progress": {
+                                    "current_frame": int(video_current_frame),
+                                    "total_frames": int(video_total_frames),
+                                    "is_playing": video_playing,
+                                    "speed": float(video_speed),
+                                    "fps": float(video_fps),
+                                }
+                            })
+                elif action == "video_stop":
+                    video_playing = False
+                    if video_cap is not None and video_total_frames > 0:
+                        video_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        video_current_frame = 0
+                        ret, first_frame = video_cap.read()
+                        if ret:
+                            imported_frame = cv2.resize(first_frame, (640, 480))
+                            _, buffer = cv2.imencode('.jpg', imported_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                            await safe_send({
+                                "action": "video_frame",
+                                "image": base64.b64encode(buffer).decode('utf-8'),
+                                "video_progress": {
+                                    "current_frame": 0,
+                                    "total_frames": int(video_total_frames),
+                                    "is_playing": False,
+                                    "speed": float(video_speed),
+                                    "fps": float(video_fps),
+                                }
+                            })
+                    logger.info("Video stopped, reset to frame 0")
+                elif action == "close_video":
+                    video_playing = False
+                    if video_cap is not None:
+                        video_cap.release()
+                        video_cap = None
+                    video_path = None
+                    video_current_frame = 0
+                    video_total_frames = 0
+                    logger.info("Video closed")
+
         except WebSocketDisconnect:
-            pass  # Client disconnected cleanly from command handler
+            ws_alive = False
         except Exception as e:
             logger.error("WebSocket command handler error: %s", e)
+            ws_alive = False
 
     asyncio.create_task(handle_commands())
 
     try:
-        while True:
-            success, frame = cap.read()
-            if success:
+        static_frame_processed = False
+        while ws_alive:
+            try:
+                frame = None
+
+                is_video_frame = False
+                if camera_active and cap is not None:
+                    success, frame = cap.read()
+                    if not success:
+                        logger.warning("Camera read failed - camera may be disconnected")
+                        if not await safe_send({
+                            "type": "camera_status",
+                            "status": "offline",
+                            "message": "Camera disconnected"
+                        }):
+                            break
+                        await asyncio.sleep(1)
+                        cap.release()
+                        cap = open_camera(camera_idx)
+                        continue
+                elif video_playing and video_cap is not None:
+                    # Video playback mode — stream frames at configured speed
+                    ret, vframe = video_cap.read()
+                    if ret:
+                        video_current_frame = int(video_cap.get(cv2.CAP_PROP_POS_FRAMES))
+                        frame = cv2.resize(vframe, (640, 480))
+                        imported_frame = frame.copy()
+                        is_video_frame = True
+                    else:
+                        # End of video
+                        video_playing = False
+                        video_current_frame = int(video_total_frames)
+                        await safe_send({
+                            "action": "video_ended",
+                            "video_progress": {
+                                "current_frame": int(video_current_frame),
+                                "total_frames": int(video_total_frames),
+                                "is_playing": False,
+                                "speed": float(video_speed),
+                                "fps": float(video_fps),
+                            }
+                        })
+                        await asyncio.sleep(0.1)
+                        continue
+                elif imported_frame is not None and (system.is_ai_active or system.pending_snapshot):
+                    # Static image: process once then wait
+                    frame = imported_frame.copy()
+                    static_frame_processed = True
+                else:
+                    await asyncio.sleep(0.1)
+                    continue
+
+                if frame is None:
+                    await asyncio.sleep(0.05)
+                    continue
+
                 system.frame_counter += 1
                 should_infer = (system.frame_counter % system.inference_skip == 0)
 
-                # Run AI inference — only on selected frames, always off the event loop
                 if (system.is_ai_active or system.pending_snapshot) and system.session and should_infer:
-                    # Letterbox: pad 640×480 → 640×640 (80px top+bottom, no horizontal pad)
                     pad = np.zeros((640, 640, 3), dtype=np.uint8)
                     pad[PAD_TOP:PAD_TOP + 480, :] = frame
                     img = pad.astype(np.float32) / 255.0
                     img = np.expand_dims(np.transpose(img, (2, 0, 1)), axis=0)
 
-                    # run_in_executor keeps the event loop unblocked during 20–80ms inference
-                    _img = img  # explicit capture for lambda closure
+                    _img = img
                     outputs = await loop.run_in_executor(
                         _inference_executor,
                         lambda: system.session.run(None, {system.input_name: _img})
@@ -747,7 +1276,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     conf_mask = preds[:, 4] > system.conf_threshold
                     valid = preds[conf_mask]
                     if len(valid) > 0:
-                        # scale=1.0 (no resize), undo only PAD_TOP offset
                         xyxy = np.zeros((len(valid), 4), dtype=np.float32)
                         xyxy[:, 0] = valid[:, 0] - valid[:, 2] / 2
                         xyxy[:, 1] = valid[:, 1] - valid[:, 3] / 2 - PAD_TOP
@@ -784,7 +1312,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         "diameter": float(diam),
                         "source": "Manual" if tid < 0 else "AI"
                     })
-                # Sort by absolute ID to maintain a consistent order (Manual IDs are negative)
                 unified_list.sort(key=lambda x: abs(x["id"]))
 
                 vmd, span, count, _, out_pct = system.calculate_stats()
@@ -799,12 +1326,49 @@ async def websocket_endpoint(websocket: WebSocket):
                 if system.pending_snapshot:
                     payload["is_snapshot"] = True
                     system.pending_snapshot = False
-                await websocket.send_json(payload)
-            await asyncio.sleep(0.01)
+                # Add video progress info when a video is loaded
+                if video_cap is not None:
+                    payload["video_progress"] = {
+                        "current_frame": int(video_current_frame),
+                        "total_frames": int(video_total_frames),
+                        "is_playing": video_playing,
+                        "speed": float(video_speed),
+                        "fps": float(video_fps),
+                    }
+                if not await safe_send(payload):
+                    break  # WS dead, exit frame loop
+
+                # For static imported images, don't loop — process once then idle
+                if static_frame_processed:
+                    static_frame_processed = False
+                    # Wait until user triggers another action (snapshot, re-toggle AI, or video play)
+                    while ws_alive and not camera_active and not system.pending_snapshot and not video_playing:
+                        await asyncio.sleep(0.2)
+                    continue
+            except (WebSocketDisconnect, RuntimeError):
+                break  # Clean exit on disconnect
+            except Exception as e:
+                logger.error(f"Frame processing error: {e}")
+                # Don't try to send on error — just log and continue
+            # Frame rate control: video uses target FPS, camera/static uses minimal delay
+            if is_video_frame and video_playing:
+                base_delay = 1.0 / max(1, video_fps)
+                await asyncio.sleep(max(0.005, base_delay / video_speed))
+            else:
+                await asyncio.sleep(0.01)
     except WebSocketDisconnect:
-        pass
+        logger.info("WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket streaming error: {e}")
+        # Don't try to send on dead WS — just log
     finally:
-        cap.release()
+        ws_alive = False
+        if cap is not None:
+            logger.info("Releasing camera")
+            cap.release()
+        if video_cap is not None:
+            logger.info("Releasing video")
+            video_cap.release()
 
 if __name__ == "__main__":
     import uvicorn

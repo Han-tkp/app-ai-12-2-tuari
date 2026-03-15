@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/sidebar/Sidebar';
 import TopDashboard from '../components/dashboard/TopDashboard';
 import Workspace from '../components/workspace/Workspace';
@@ -9,21 +9,27 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AUTO_SAVE_INTERVAL } from '../store/useAppStore';
 import { API_BASE } from '../config';
+import { initializeSafeWorkspace } from '../utils/fsUtils';
 
 const appWindow = getCurrentWindow();
 
 const AppLayout: React.FC = () => {
   const {
-    setSettingsOpen, projectName, setProjectName, resetSession, triggerSave,
+    setSettingsOpen, projectName, setProjectName, triggerSave,
     hotkeyLiveAI, hotkeySnapshot, isCameraRunning, isAIRunning, setAIRunning,
-    loadProjectData, shell,
+    loadProjectData, shell, importedMediaPath, newProject,
     isDirty, autoSaveEnabled, lastAutoSave, autoSaveError,
-    triggerAutoSave, setAutoSaveEnabled, clearAutoSaveError, setIsDirty, clearAutoSave,
-    loadFromAutoSave, confirmAutoSaveRecovery,
+    triggerAutoSave, setAutoSaveEnabled, clearAutoSaveError,
+    loadFromAutoSave,
   } = useAppStore();
-  
+
   const [isFileMenuOpen, setFileMenuOpen] = useState(false);
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
+
+  // Modal states for file operations
+  const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
+  const [modalInput, setModalInput] = useState('');
+  const modalInputRef = useRef<HTMLInputElement>(null);
 
   // ── Auto-Save Interval ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -49,10 +55,22 @@ const AppLayout: React.FC = () => {
     checkRecovery();
   }, []);
 
+  // ── Initialize Safe Workspace on Mount ─────────────────────────────────────
+  useEffect(() => {
+    const initWorkspace = async () => {
+      try {
+        await initializeSafeWorkspace();
+        console.log('Safe workspace initialized');
+      } catch (error) {
+        console.error('Failed to initialize workspace:', error);
+      }
+    };
+    initWorkspace();
+  }, []);
+
   // ── Cleanup auto-save on clean exit ────────────────────────────────────────
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // Clear auto-save on clean exit
       useAppStore.getState().clearAutoSave();
     };
 
@@ -60,27 +78,40 @@ const AppLayout: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
+  // Focus modal input when modal opens
+  useEffect(() => {
+    if (modalType && modalInputRef.current) {
+      setTimeout(() => modalInputRef.current?.focus(), 100);
+    }
+  }, [modalType]);
+
+  // AI/Snapshot available when camera running OR imported media
+  const canUseAI = isCameraRunning || !!importedMediaPath;
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input/select
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
-      // File menu shortcuts
       if (e.ctrlKey) {
         if (!e.shiftKey && e.key === 'n') { e.preventDefault(); handleNewProject(); return; }
         if (!e.shiftKey && e.key === 'o') { e.preventDefault(); handleOpenProject(); return; }
         if (e.shiftKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); handleSaveAs(); return; }
         if (!e.shiftKey && e.key === 's') { e.preventDefault(); handleSaveProject(); return; }
+
+        if (e.shiftKey && e.key === '1') { e.preventDefault(); useAppStore.getState().setFilterRange(10, 30); return; }
+        if (e.shiftKey && e.key === '2') { e.preventDefault(); useAppStore.getState().setFilterRange(15, 25); return; }
+        if (e.shiftKey && e.key === '3') { e.preventDefault(); useAppStore.getState().setFilterRange(5, 35); return; }
+        if (e.shiftKey && e.key === 'R') { e.preventDefault(); useAppStore.getState().setFilterRange(10, 30); return; }
       }
 
       const keyCombo = (e.ctrlKey ? 'Ctrl+' : '') + (e.shiftKey ? 'Shift+' : '') + (e.code === 'Space' ? 'Space' : e.key);
 
       if (keyCombo === hotkeyLiveAI) {
         e.preventDefault();
-        if (isCameraRunning) setAIRunning(!isAIRunning);
+        if (canUseAI) setAIRunning(!isAIRunning);
       } else if (keyCombo === hotkeySnapshot) {
         e.preventDefault();
-        if (isCameraRunning) {
+        if (canUseAI) {
           window.dispatchEvent(new CustomEvent('send-backend-command', { detail: { action: 'take_snapshot' } }));
         }
       }
@@ -89,17 +120,19 @@ const AppLayout: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hotkeyLiveAI, hotkeySnapshot, isCameraRunning, isAIRunning, setAIRunning]);
+  }, [hotkeyLiveAI, hotkeySnapshot, canUseAI, isAIRunning, setAIRunning]);
 
   const handleNewProject = () => {
-    const name = prompt("Enter new project name:", "Untitled Project");
-    if (name) {
-      resetSession();
-      setProjectName(name);
-      clearAutoSave();
-      setIsDirty(false);
-    }
     setFileMenuOpen(false);
+    setModalInput('Untitled Project');
+    setModalType('new');
+  };
+
+  const confirmNewProject = async () => {
+    if (modalInput.trim()) {
+      await newProject(modalInput.trim());
+    }
+    setModalType(null);
   };
 
   const handleOpenProject = async () => {
@@ -111,16 +144,12 @@ const AppLayout: React.FC = () => {
       });
 
       if (selected && typeof selected === 'string') {
-        // Since .drop is a zip, we'd normally need a zip lib or backend helper.
-        // For simplicity, let's add a backend endpoint to "load" if needed, 
-        // or just expect project.json if we want to be quick.
-        // Let's assume we can fetch the project info from backend for safety.
         const response = await fetch(`${API_BASE}/api/load-project?path=${encodeURIComponent(selected)}`);
         if (response.ok) {
           const data = await response.json();
           loadProjectData(data);
         } else {
-          alert("Failed to load project file.");
+          console.error('Failed to load project file');
         }
       }
     } catch (err) {
@@ -133,12 +162,19 @@ const AppLayout: React.FC = () => {
     await triggerSave();
   };
 
-  const handleSaveAs = async () => {
+  const handleSaveAs = () => {
     setFileMenuOpen(false);
-    const newName = prompt('Save as (Enter new project name):', projectName);
+    setModalInput(projectName);
+    setModalType('save-as');
+  };
+
+  const confirmSaveAs = async () => {
+    const newName = modalInput.trim();
     if (newName && newName !== projectName) {
-      // Zustand set() is synchronous — triggerSave() will read the updated name via get()
       setProjectName(newName);
+    }
+    setModalType(null);
+    if (newName) {
       await triggerSave();
     }
   };
@@ -147,7 +183,6 @@ const AppLayout: React.FC = () => {
     appWindow.close();
   };
 
-  // Format last auto-save time
   const formatAutoSaveTime = (timestamp: number) => {
     if (!timestamp) return 'Never';
     const diff = Date.now() - timestamp;
@@ -156,6 +191,16 @@ const AppLayout: React.FC = () => {
     if (mins < 60) return `${mins}m ago`;
     const hours = Math.floor(mins / 60);
     return `${hours}h ago`;
+  };
+
+  const handleModalKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (modalType === 'new') confirmNewProject();
+      else if (modalType === 'save-as') confirmSaveAs();
+    } else if (e.key === 'Escape') {
+      setModalType(null);
+    }
   };
 
   return (
@@ -180,7 +225,7 @@ const AppLayout: React.FC = () => {
             </div>
             <div className="px-5 py-4">
               <p className="text-[13px]" style={{ color: 'var(--text2)' }}>
-                We found an auto-saved session from <strong>{formatAutoSaveTime(lastAutoSave)}</strong>. 
+                We found an auto-saved session from <strong>{formatAutoSaveTime(lastAutoSave)}</strong>.
                 Would you like to recover it?
               </p>
             </div>
@@ -197,13 +242,68 @@ const AppLayout: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  confirmAutoSaveRecovery();
+                  useAppStore.getState().confirmAutoSaveRecovery();
                   setShowRecoverDialog(false);
                 }}
                 className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
                 style={{ background: 'var(--accent)', color: '#fff' }}
               >
                 Recover Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Input Modal (New Project / Save As) ─────────────────────────────── */}
+      {modalType && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className="w-[400px] rounded-lg border mac-dialog-shadow overflow-hidden animate-in zoom-in-95 duration-200"
+            style={{
+              background: 'var(--bg-surface)',
+              borderColor: 'var(--border-strong)',
+            }}
+          >
+            <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+              <span className="text-[14px] font-semibold">
+                {modalType === 'new' ? 'New Project' : 'Save As'}
+              </span>
+            </div>
+            <div className="px-5 py-4">
+              <label className="text-[12px] font-medium block mb-2" style={{ color: 'var(--text2)' }}>
+                Project Name
+              </label>
+              <input
+                ref={modalInputRef}
+                type="text"
+                value={modalInput}
+                onChange={(e) => setModalInput(e.target.value)}
+                onKeyDown={handleModalKeyDown}
+                className="w-full rounded-md px-3 py-2 text-[13px] outline-none transition-colors border"
+                style={{
+                  background: 'var(--bg-input)',
+                  borderColor: 'var(--border-strong)',
+                  color: 'var(--text1)',
+                }}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor = 'var(--accent)'}
+                onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'var(--border-strong)'}
+              />
+            </div>
+            <div className="px-5 py-3 flex justify-end gap-2" style={{ background: 'var(--bg-surface2)' }}>
+              <button
+                onClick={() => setModalType(null)}
+                className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: 'var(--bg-surface3)', color: 'var(--text2)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={modalType === 'new' ? confirmNewProject : confirmSaveAs}
+                className="px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                {modalType === 'new' ? 'Create' : 'Save'}
               </button>
             </div>
           </div>
@@ -400,7 +500,7 @@ const AppLayout: React.FC = () => {
 };
 
 const MenuItem: React.FC<{ icon: React.ReactNode; label: string; shortcut?: string; color?: string; onClick?: () => void }> = ({ icon, label, shortcut, color, onClick }) => (
-  <button 
+  <button
     onClick={onClick}
     className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--accent)] hover:text-white transition-all group text-left"
   >

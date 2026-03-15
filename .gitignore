@@ -33,5 +33,36 @@ __pycache__/
 # Tauri build output
 src-tauri/target/
 
+# Tauri mobile icons (not needed for Windows desktop)
+src-tauri/icons/android/
+src-tauri/icons/ios/
+
+# AI / Qwen
 .qwen/
 gha-creds-*.json
+QWEN.md
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Generated report files (dev artifacts)
+*_REPORT.md
+*_COMPLETE.md
+*_SUMMARY.md
+FEATURE_EVALUATION.md
+detailed_file_analysis.md
+project_logic_summary.md
+
+# Debug / test artifacts
+imageforAIproblem/
+test_all_features.py
+$null
+
+# OS files
+Thumbs.db
+Desktop.ini
+.Spotlight-V100
+.Trashes
+
+# Icon source (keep in repo but not needed for build)
+# iconapp/

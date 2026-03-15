@@ -2,8 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import AnnotationLayer from './AnnotationLayer';
 import SessionDropletTable from './SessionDropletTable';
+import DragDropImport from './DragDropImport';
+import VideoControls from './VideoControls';
 import { WS_STREAM } from '../../config';
 import { Box } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 
 const Workspace: React.FC = () => {
   const {
@@ -13,33 +16,60 @@ const Workspace: React.FC = () => {
     setHardwareInfo,
     currentSessionDroplets, isSessionTablePoppedOut, setSessionTablePoppedOut,
     activeSlideId, setActiveSlideId, slides,
+    setImportedMediaPath, importedMediaPath,
   } = useAppStore();
 
   const [zoom, setZoom] = useState(100);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [isSlideMenuOpen, setSlideMenuOpen] = useState(false);
   const [snapshotFreeze, setSnapshotFreeze] = useState<{ src: string; count: number } | null>(null);
+  const snapshotFreezeRef = useRef(snapshotFreeze);
+  snapshotFreezeRef.current = snapshotFreeze;
+  const [snapshotPosition, setSnapshotPosition] = useState({ x: 0, y: 0 });
+  const [isDraggingSnapshot, setIsDraggingSnapshot] = useState(false);
+  const [isImportingMedia, setIsImportingMedia] = useState(false);
+  const [importProgress, setImportProgress] = useState<string>('');
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snapshotDragOffset = useRef({ x: 0, y: 0 });
+  const snapshotRef = useRef<HTMLDivElement>(null);
   const ws = useRef<WebSocket | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const CANVAS_WIDTH = 1280;
   const CANVAS_HEIGHT = 720;
 
-  useEffect(() => {
-    if (isCameraRunning) {
-      ws.current = new WebSocket(WS_STREAM);
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  }, []);
 
-      ws.current.onopen = () => {
+  // Always-on WebSocket — connects on mount, reconnects automatically
+  useEffect(() => {
+    let cancelled = false;
+
+    const connect = () => {
+      if (cancelled) return;
+      const socket = new WebSocket(WS_STREAM);
+      ws.current = socket;
+
+      socket.onopen = () => {
+        if (cancelled) { socket.close(); return; }
+        console.log('[WS] Connected');
         const state = useAppStore.getState();
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-          ws.current.send(JSON.stringify({ action: 'set_ai_active', active: state.isAIRunning }));
-          ws.current.send(JSON.stringify({ action: 'set_lens', lens: state.objectiveLens }));
-          ws.current.send(JSON.stringify({ action: 'set_camera', index: state.cameraIndex }));
-        }
+        // Sync current state to backend (lightweight, no side effects)
+        socket.send(JSON.stringify({ action: 'set_ai_active', active: state.isAIRunning }));
+        socket.send(JSON.stringify({ action: 'set_lens', lens: state.objectiveLens }));
+        // NOTE: Don't auto-start camera on reconnect — the camera start/stop
+        // is handled by the isCameraRunning useEffect below. This prevents
+        // rapid camera open/close cycles during HMR reloads.
       };
 
-      ws.current.onmessage = (event) => {
+      socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'hardware_info') {
           setHardwareInfo({
@@ -48,56 +78,211 @@ const Workspace: React.FC = () => {
             cpu_cores: data.cpu_cores,
             inference_skip: data.inference_skip,
           });
-        } else if (data.image) {
+        } else if (data.type === 'camera_status') {
+          if (data.status === 'offline' || data.status === 'error') {
+            setImageSrc(null);
+            console.warn(`Camera ${data.status}: ${data.message}`);
+          }
+        } else if (data.image && !data.action) {
           const src = `data:image/jpeg;base64,${data.image}`;
 
           if (data.is_snapshot) {
-            // Freeze frame for snapshot
             if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current);
             const duration = useAppStore.getState().snapshotDisplayDuration;
             setSnapshotFreeze({ src, count: data.count ?? 0 });
             snapshotTimerRef.current = setTimeout(() => setSnapshotFreeze(null), duration * 1000);
-          } else if (!snapshotFreeze) {
+          } else if (!snapshotFreezeRef.current) {
             setImageSrc(src);
           }
 
           if (data.vmd !== undefined) {
             updateStats(data.vmd, data.span, data.count, data.out_of_bounds, data.ram, data.session_droplets || []);
           }
+          // Update video progress if present in frame payload
+          if (data.video_progress) {
+            useAppStore.getState().setVideoState({
+              videoCurrentFrame: data.video_progress.current_frame,
+              videoTotalFrames: data.video_progress.total_frames,
+              isVideoPlaying: data.video_progress.is_playing,
+              videoSpeed: data.video_progress.speed,
+              videoFps: data.video_progress.fps,
+            });
+          }
         } else if (data.action === 'export_result') {
-          alert(`Report exported successfully to: ${data.path}`);
+          showToast(`Report exported: ${data.path}`, 'success');
+        } else if (data.action === 'snapshot_exported') {
+          showToast(`Snapshot saved: ${data.path}`, 'success');
+        } else if (data.action === 'snapshot_export_error') {
+          showToast(`Snapshot export failed: ${data.error}`, 'error');
+        } else if (data.action === 'media_imported') {
+          setIsImportingMedia(false);
+          setImportProgress('');
+
+          if (data.image) {
+            const src = `data:image/jpeg;base64,${data.image}`;
+            setImageSrc(src);
+            setImportedMediaPath(data.path);
+            console.log('Media displayed via backend:', data.type, data.width, 'x', data.height);
+          }
+          // Set video playback state if this is a video
+          if (data.is_video) {
+            useAppStore.getState().setVideoState({
+              isVideoLoaded: true,
+              isVideoPlaying: false,
+              videoTotalFrames: data.total_frames || 0,
+              videoFps: data.fps || 30,
+              videoCurrentFrame: 0,
+              videoSpeed: 1.0,
+            });
+          } else {
+            // Image import — clear video state
+            useAppStore.getState().setVideoState({ isVideoLoaded: false, isVideoPlaying: false });
+          }
+          showToast(`${data.type === 'video' ? 'Video' : 'Image'} imported — AI & Snapshot ready`, 'success');
+        } else if (data.action === 'import_error') {
+          setIsImportingMedia(false);
+          setImportProgress('');
+          showToast(`Import failed: ${data.error}`, 'error');
+        } else if (data.action === 'import_progress') {
+          setImportProgress(data.message);
+        } else if (data.action === 'video_frame') {
+          // Video seek/stop result — display the frame
+          if (data.image) {
+            setImageSrc(`data:image/jpeg;base64,${data.image}`);
+          }
+          if (data.video_progress) {
+            useAppStore.getState().setVideoState({
+              videoCurrentFrame: data.video_progress.current_frame,
+              videoTotalFrames: data.video_progress.total_frames,
+              isVideoPlaying: data.video_progress.is_playing,
+              videoSpeed: data.video_progress.speed,
+              videoFps: data.video_progress.fps,
+            });
+          }
+        } else if (data.action === 'video_ended') {
+          useAppStore.getState().setVideoState({ isVideoPlaying: false });
+          if (data.video_progress) {
+            useAppStore.getState().setVideoState({
+              videoCurrentFrame: data.video_progress.current_frame,
+            });
+          }
+          showToast('Video playback ended', 'info');
+        } else if (data.action === 'detect_roi_result') {
+          if (data.found && data.droplets?.length > 0) {
+            // AI-assisted detection: create annotations for found droplets
+            const BACKEND_W = 640;
+            const BACKEND_H = 480;
+            const CW = 1280, CH = 720;
+            const dScale = Math.min(CW / BACKEND_W, CH / BACKEND_H);
+            const oX = (CW - BACKEND_W * dScale) / 2;
+            const oY = (CH - BACKEND_H * dScale) / 2;
+
+            for (const drop of data.droplets) {
+              const canvasX = drop.cx * dScale + oX;
+              const canvasY = drop.cy * dScale + oY;
+              const boxW = (drop.box[2] - drop.box[0]) * dScale;
+              const boxH = (drop.box[3] - drop.box[1]) * dScale;
+              const canvasRadius = Math.max(boxW, boxH) / 2;
+
+              const ann = {
+                id: uuidv4(),
+                type: 'circle' as const,
+                x: canvasX,
+                y: canvasY,
+                radius: canvasRadius,
+                color: '#0a84ff',
+                diameter_um: drop.diameter,
+                detectionId: drop.id,
+              };
+              useAppStore.getState().addAnnotation(ann);
+            }
+
+            // Update stats
+            if (data.vmd !== undefined) {
+              updateStats(
+                data.vmd, data.span, data.count,
+                data.out_of_bounds, useAppStore.getState().ramUsage,
+                data.session_droplets || []
+              );
+            }
+
+            const names = data.droplets.map((d: any) => `#${d.id} ${d.diameter.toFixed(1)}µm`).join(', ');
+            showToast(`Detected: ${names}`, 'success');
+          } else {
+            showToast(data.message || 'ไม่ตรวจพบ droplet ในบริเวณที่เลือก', 'error');
+          }
         }
       };
 
-      const handleCommand = (e: any) => {
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-          ws.current.send(JSON.stringify(e.detail));
-        }
+      socket.onclose = () => {
+        if (cancelled) return;
+        console.log('[WS] Disconnected, reconnecting in 2s...');
+        reconnectTimerRef.current = setTimeout(connect, 2000);
       };
 
-      window.addEventListener('send-backend-command', handleCommand);
-      return () => {
-        window.removeEventListener('send-backend-command', handleCommand);
-        if (ws.current) ws.current.close();
+      socket.onerror = (err) => {
+        console.warn('[WS] Error:', err);
+        socket.close();
       };
-    } else {
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (ws.current) ws.current.close();
-      setImageSrc(null);
-    }
-  }, [isCameraRunning, updateStats, setHardwareInfo]);
+    };
+  }, [updateStats, setHardwareInfo, setImportedMediaPath, showToast]);
 
+  // Send commands to backend via WebSocket (always available)
   useEffect(() => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN && isCameraRunning) {
+    const handleCommand = (e: any) => {
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify(e.detail));
+      } else {
+        console.warn('[WS] Not connected, command dropped:', e.detail);
+      }
+    };
+
+    window.addEventListener('send-backend-command', handleCommand);
+    return () => window.removeEventListener('send-backend-command', handleCommand);
+  }, []);
+
+  // Camera start/stop via WebSocket commands
+  useEffect(() => {
+    const sendCameraCommand = () => {
+      if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+      if (isCameraRunning) {
+        ws.current.send(JSON.stringify({ action: 'start_camera', index: cameraIndex }));
+      } else {
+        ws.current.send(JSON.stringify({ action: 'stop_camera' }));
+      }
+    };
+    // If WS is already open, send immediately; otherwise wait briefly for connection
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      sendCameraCommand();
+    } else {
+      const timer = setTimeout(sendCameraCommand, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isCameraRunning, cameraIndex]);
+
+  // Sync AI state
+  useEffect(() => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ action: 'set_ai_active', active: isAIRunning }));
     }
-  }, [isAIRunning, isCameraRunning]);
+  }, [isAIRunning]);
 
+  // Sync lens
   useEffect(() => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN && isCameraRunning) {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ action: 'set_lens', lens: objectiveLens }));
     }
-  }, [objectiveLens, isCameraRunning]);
+  }, [objectiveLens]);
 
+  // Sync camera index change (while camera is running)
   useEffect(() => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN && isCameraRunning) {
       ws.current.send(JSON.stringify({ action: 'set_camera', index: cameraIndex }));
@@ -105,12 +290,58 @@ const Workspace: React.FC = () => {
   }, [cameraIndex, isCameraRunning]);
 
   const handleWheel = useCallback((e: WheelEvent) => {
-    if (!e.ctrlKey) return;
+    const zoomWithCtrl = useAppStore.getState().zoomWithCtrl;
+    if (zoomWithCtrl && !e.ctrlKey) return;
     e.preventDefault();
     const zoomStep = 5;
     if (e.deltaY < 0) setZoom(prev => Math.min(400, prev + zoomStep));
     else setZoom(prev => Math.max(50, prev - zoomStep));
   }, []);
+
+  // Snapshot drag handlers
+  const handleSnapshotMouseDown = (e: React.MouseEvent) => {
+    if (!snapshotRef.current) return;
+    setIsDraggingSnapshot(true);
+    const rect = snapshotRef.current.getBoundingClientRect();
+    snapshotDragOffset.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingSnapshot || !viewportRef.current) return;
+      const viewportRect = viewportRef.current.getBoundingClientRect();
+      const x = e.clientX - viewportRect.left - snapshotDragOffset.current.x;
+      const y = e.clientY - viewportRect.top - snapshotDragOffset.current.y;
+      const maxX = viewportRect.width - 200;
+      const maxY = viewportRect.height - 100;
+      setSnapshotPosition({
+        x: Math.max(0, Math.min(x, maxX)),
+        y: Math.max(0, Math.min(y, maxY))
+      });
+    };
+
+    const handleMouseUp = () => setIsDraggingSnapshot(false);
+
+    if (isDraggingSnapshot) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingSnapshot]);
+
+  // Clear viewport when project resets (importedMediaPath cleared + camera off)
+  useEffect(() => {
+    if (!importedMediaPath && !isCameraRunning) {
+      setImageSrc(null);
+    }
+  }, [importedMediaPath, isCameraRunning]);
 
   // Attach wheel listener to viewport with passive:false so we can preventDefault
   useEffect(() => {
@@ -120,8 +351,70 @@ const Workspace: React.FC = () => {
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
+  // Handle media import from Tauri drag-drop
+  const handleImportMedia = useCallback(async (path: string, type: 'image' | 'video') => {
+    console.log('[Import] Tauri drop path:', path, type);
+    setIsImportingMedia(true);
+    setImportProgress(`Importing ${type}...`);
+
+    try {
+      // For images, read and display locally immediately
+      if (type === 'image') {
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        const fileData = await readFile(path);
+        const bytes = new Uint8Array(fileData);
+        const CHUNK_SIZE = 8192;
+        const chunks: string[] = [];
+        for (let i = 0; i < bytes.byteLength; i += CHUNK_SIZE) {
+          const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.byteLength));
+          chunks.push(String.fromCharCode(...chunk));
+        }
+        const base64 = btoa(chunks.join(''));
+        const ext = path.split('.').pop()?.toLowerCase();
+        const mimeType = ext === 'png' ? 'image/png' :
+                         ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+                         ext === 'bmp' ? 'image/bmp' :
+                         ext === 'tiff' || ext === 'tif' ? 'image/tiff' : 'image/jpeg';
+        setImageSrc(`data:${mimeType};base64,${base64}`);
+        setImportedMediaPath(path);
+      }
+
+      // For images: display is already done locally, clear spinner now
+      // Backend will still process for AI, but user sees image immediately
+      if (type === 'image') {
+        setIsImportingMedia(false);
+        setImportProgress('');
+      }
+
+      // Send to backend for AI processing (and video frame extraction)
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
+          action: 'import_media',
+          type,
+          path,
+          display: type === 'image',
+        }));
+      } else {
+        if (type === 'video') {
+          showToast('Backend not connected — video requires backend for frame extraction', 'error');
+        } else {
+          showToast('Image displayed — connect backend for AI features', 'info');
+        }
+        setIsImportingMedia(false);
+        setImportProgress('');
+      }
+    } catch (err) {
+      console.error('[Import] Failed to read file:', err);
+      showToast(`Import failed: ${(err as Error).message}`, 'error');
+      setIsImportingMedia(false);
+      setImportProgress('');
+    }
+  }, [showToast, setImportedMediaPath]);
+
   const activeSlide = slides.find(s => s.id === activeSlideId);
   const slideIndex = slides.findIndex(s => s.id === activeSlideId);
+  // Show "No Signal" only when there's no image at all (neither camera nor imported)
+  const hasVisual = !!(snapshotFreeze ? snapshotFreeze.src : imageSrc);
 
   return (
     <div className="w-full h-full flex flex-col transition-colors relative">
@@ -133,9 +426,9 @@ const Workspace: React.FC = () => {
       >
         {/* Camera status */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className={`w-1.5 h-1.5 rounded-full ${isCameraRunning ? 'bg-[var(--mac-green)] animate-pulse' : 'bg-[var(--text4)]'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full ${isCameraRunning ? 'bg-[var(--mac-green)] animate-pulse' : importedMediaPath ? 'bg-[var(--mac-orange)]' : 'bg-[var(--text4)]'}`} />
           <span className="text-[11px] font-medium" style={{ color: 'var(--text3)' }}>
-            {isCameraRunning ? 'Live' : 'Offline'}
+            {isCameraRunning ? 'Live' : importedMediaPath ? 'Imported' : 'Offline'}
           </span>
         </div>
         {isAIRunning && (
@@ -229,10 +522,18 @@ const Workspace: React.FC = () => {
           )}
           <AnnotationLayer width={CANVAS_WIDTH} height={CANVAS_HEIGHT} scale={1} />
 
-          {/* Snapshot freeze overlay */}
+          {/* Snapshot freeze overlay - draggable */}
           {snapshotFreeze && (
-            <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-lg pointer-events-none"
-              style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid var(--accent)' }}
+            <div
+              ref={snapshotRef}
+              className="absolute flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-move pointer-events-auto"
+              style={{
+                top: `${snapshotPosition.y}px`,
+                right: `${snapshotPosition.x}px`,
+                background: 'rgba(0,0,0,0.7)',
+                border: '1px solid var(--accent)',
+              }}
+              onMouseDown={handleSnapshotMouseDown}
             >
               <div className="w-2 h-2 rounded-full bg-[var(--mac-red)] animate-pulse" />
               <span className="text-[11px] font-bold text-white">SNAPSHOT</span>
@@ -242,7 +543,7 @@ const Workspace: React.FC = () => {
             </div>
           )}
 
-          {(!isCameraRunning || (!imageSrc && !snapshotFreeze)) && (
+          {!hasVisual && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none">
               <svg viewBox="0 0 40 40" className="w-10 h-10" fill="none" stroke="var(--text4)" strokeWidth="1.5">
                 <rect x="4" y="4" width="32" height="26" rx="3" />
@@ -250,6 +551,7 @@ const Workspace: React.FC = () => {
                 <line x1="8" y1="8" x2="32" y2="28" strokeWidth="1.5" />
               </svg>
               <span className="text-[11px] font-bold uppercase tracking-[0.15em] mt-4" style={{ color: 'var(--text4)' }}>No Signal</span>
+              <span className="text-[9px] mt-1" style={{ color: 'var(--text4)' }}>Start camera or drag & drop an image</span>
             </div>
           )}
         </div>
@@ -257,6 +559,58 @@ const Workspace: React.FC = () => {
 
       {/* Unified floating session + manual data table */}
       <SessionDropletTable />
+
+      {/* Video playback controls (floating) */}
+      <VideoControls />
+
+      {/* Drag & Drop Import Overlay */}
+      <DragDropImport onImport={handleImportMedia} />
+
+      {/* Import Progress Indicator */}
+      {isImportingMedia && (
+        <div className="fixed bottom-20 right-4 z-[100] px-4 py-3 rounded-lg border mac-dialog-shadow pointer-events-auto"
+          style={{
+            background: 'var(--bg-surface)',
+            borderColor: 'var(--accent)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+            />
+            <span className="text-sm font-medium" style={{ color: 'var(--text1)' }}>
+              {importProgress || 'Importing...'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-20 right-4 z-[200] px-4 py-3 rounded-lg border pointer-events-auto animate-in slide-in-from-bottom-2 duration-200 max-w-sm ${
+            toast.type === 'error' ? 'border-[var(--mac-red)]' :
+            toast.type === 'success' ? 'border-[var(--mac-green)]' :
+            'border-[var(--accent)]'
+          }`}
+          style={{
+            background: 'var(--bg-surface)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}
+          onClick={() => setToast(null)}
+        >
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${
+              toast.type === 'error' ? 'bg-[var(--mac-red)]' :
+              toast.type === 'success' ? 'bg-[var(--mac-green)]' :
+              'bg-[var(--accent)]'
+            }`} />
+            <span className="text-[12px] font-medium" style={{ color: 'var(--text1)' }}>
+              {toast.message}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Bottom zoom bar ───────────────────────────────────────────── */}
       <div

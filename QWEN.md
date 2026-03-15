@@ -1,33 +1,48 @@
-# QWEN.md - Project Context Guide
+# QWEN.md - DropDetect AI Project Context
 
 ## Project Overview
 
-**DropDetect AI** is a professional desktop application for real-time chemical spray droplet analysis following WHO standards. It uses a hybrid architecture:
+**DropDetect AI** is a professional desktop application for real-time chemical spray droplet analysis following WHO (World Health Organization) standards. The application captures microscope camera feeds, detects droplets using YOLOv8 ONNX models, tracks them with ByteTrack, and generates statistical reports (Dv10, Dv50/VMD, Dv90, SPAN) compliant with WHO chemical spray testing standards.
 
-- **Frontend**: React 19 + TypeScript + Vite, wrapped in Tauri v2 (Rust) for desktop capabilities
-- **Backend**: Python/FastAPI server handling AI inference via ONNX runtime
-- **Communication**: WebSocket for real-time frame streaming, REST for project operations
+### Architecture
 
-The application captures microscope camera feeds, detects droplets using YOLOv8 ONNX models, tracks them with ByteTrack, and generates statistical reports (Dv10, Dv50/VMD, Dv90, SPAN) compliant with WHO chemical spray testing standards.
+Hybrid desktop application with three main layers:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DropDetect AI Desktop                     │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐         WebSocket         ┌──────────┐ │
+│  │   Tauri Shell   │  http://localhost:1420    │  Python  │ │
+│  │   (Rust)        │ ◄──────────────────────►  │ FastAPI  │ │
+│  │                 │   ws://localhost:8000     │ Backend  │ │
+│  │  ┌───────────┐  │                           │          │ │
+│  │  │  React    │  │                           │ - Camera │ │
+│  │  │  + TS     │  │                           │ - AI/ONNX│ │
+│  │  │  Frontend │  │                           │ - Tracking│ │
+│  │  └───────────┘  │                           │ - Excel  │ │
+│  └─────────────────┘                           └──────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Technology Stack
 
-| Layer | Technology |
-|-------|------------|
-| Desktop Shell | Tauri v2 (Rust) |
-| Frontend Framework | React 19 + TypeScript |
-| Build Tool | Vite 7 |
-| Styling | Tailwind CSS v4 (CSS variables) |
-| State Management | Zustand |
-| Canvas Rendering | React-Konva + Konva |
-| Icons | Lucide React |
-| Backend Framework | FastAPI (Python) |
-| AI Runtime | ONNX Runtime |
-| Object Tracking | supervision (ByteTrack) |
-| Image Processing | OpenCV |
-| Report Generation | openpyxl (Excel) |
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Desktop Shell** | Tauri v2 (Rust) | Native window management, file system access |
+| **Frontend Framework** | React 19 + TypeScript | UI components, state management |
+| **Build Tool** | Vite 7 | Fast development server and bundling |
+| **Styling** | Tailwind CSS v4 | Utility-first CSS with CSS variables |
+| **State Management** | Zustand | Single source of truth for app state |
+| **Canvas Rendering** | React-Konva + Konva | Manual annotation tools |
+| **Icons** | Lucide React | Icon library |
+| **Backend Framework** | FastAPI (Python) | REST API + WebSocket server |
+| **AI Runtime** | ONNX Runtime | YOLOv8 model inference |
+| **Object Tracking** | supervision (ByteTrack) | Multi-object tracking |
+| **Image Processing** | OpenCV | Camera capture, image processing |
+| **Report Generation** | openpyxl | Styled Excel reports with charts |
 
 ---
 
@@ -37,35 +52,47 @@ The application captures microscope camera feeds, detects droplets using YOLOv8 
 webappsdesktop/
 ├── src/                          # React frontend source
 │   ├── components/
-│   │   ├── dashboard/            # TopDashboard.tsx (metrics strip)
-│   │   ├── sidebar/              # Sidebar.tsx (controls, Analyze/Report tabs)
-│   │   ├── workspace/            # Workspace.tsx, AnnotationLayer.tsx, ManualEditTable.tsx
-│   │   └── SettingsWindow.tsx
+│   │   ├── dashboard/
+│   │   │   └── TopDashboard.tsx         # Real-time metrics strip
+│   │   ├── sidebar/
+│   │   │   └── Sidebar.tsx              # Controls, Analyze/Report tabs
+│   │   ├── workspace/
+│   │   │   ├── Workspace.tsx            # Camera viewport, WebSocket manager
+│   │   │   ├── AnnotationLayer.tsx      # React-Konva manual annotations
+│   │   │   ├── ManualEditTable.tsx      # Manual measurements table
+│   │   │   └── SessionDropletTable.tsx  # Session data with WHO compliance
+│   │   ├── SettingsWindow.tsx           # Draggable settings panel
+│   │   └── SystemStatusBar.tsx          # Auto-save status bar
 │   ├── layouts/
-│   │   └── AppLayout.tsx         # Root shell, titlebar, hotkeys, file menu
+│   │   └── AppLayout.tsx                # Root shell, titlebar, hotkeys
 │   ├── store/
-│   │   └── useAppStore.ts        # Single source of truth (Zustand)
+│   │   └── useAppStore.ts               # Single source of truth (Zustand)
 │   ├── hooks/
-│   │   └── useDraggable.ts       # Shared draggable panel hook
+│   │   └── useDraggable.ts              # Draggable panel hook
 │   ├── utils/
-│   │   └── fsUtils.ts            # Tauri FS helpers (safe workspace dir)
+│   │   └── fsUtils.ts                   # Tauri FS helpers
 │   ├── assets/
-│   ├── config.ts                 # Backend URLs (API_BASE, WS_STREAM)
+│   ├── config.ts                        # Backend URLs (API_BASE, WS_STREAM)
+│   ├── index.css                        # Theme CSS variables
 │   ├── App.tsx
 │   └── main.tsx
 ├── backend/
-│   └── main.py                   # FastAPI server, AI inference, Excel export
+│   └── main.py                          # FastAPI server, AI inference
 ├── src-tauri/
-│   ├── src/                      # Rust source (minimal window management)
+│   ├── src/                             # Rust source (minimal)
 │   ├── capabilities/
-│   │   └── default.json          # Tauri plugin permissions
+│   │   └── default.json                 # Tauri plugin permissions
 │   ├── icons/
-│   ├── tauri.conf.json           # Tauri configuration
+│   ├── tauri.conf.json                  # Tauri configuration
 │   ├── Cargo.toml
 │   └── build.rs
-├── fileonnx/                     # ONNX models (yolov8n_4x.onnx, yolov8n_10x.onnx)
-├── resources/                    # Calibration JSON files (4x.json, 10x.json)
-├── datafordevapp/                # Development data
+├── fileonnx/                            # ONNX models
+│   ├── yolov8n_4x.onnx
+│   └── yolov8n_10x.onnx
+├── resources/                           # Calibration JSON files
+│   ├── 4x.json
+│   └── 10x.json
+├── datafordevapp/                       # Development data
 ├── public/
 ├── index.html
 ├── package.json
@@ -112,7 +139,7 @@ cd backend
 python main.py
 ```
 
-**Note**: The backend must be started separately before using AI features. The frontend connects to `ws://localhost:8000/ws/stream`.
+**Important**: The backend must be started separately before using AI features. The frontend connects to `ws://localhost:8000/ws/stream`.
 
 ---
 
@@ -177,13 +204,14 @@ python main.py
 | POST | `/api/reset-stats` | Clear session statistics |
 | POST | `/api/save-project` | Save project (.drop + Excel) |
 | GET | `/api/load-project` | Load project from .drop file |
+| POST | `/api/cleanup-autosave` | Clean up old auto-save files |
 
 ---
 
 ## Key Configuration Files
 
 ### `src/config.ts`
-Single source for backend URLs. Modify here to change backend endpoint:
+Single source for backend URLs:
 ```typescript
 export const API_BASE = 'http://localhost:8000';
 export const WS_STREAM = 'ws://localhost:8000/ws/stream';
@@ -197,6 +225,8 @@ Single source of truth. All app state lives here:
 - Manual annotations (circle, rect, line tools)
 - Slides and project data
 - Settings (hotkeys, confidence threshold, appearance)
+- Auto-save state (isDirty, lastAutoSave, autoSaveEnabled)
+- Excel language preference (th/en)
 
 ### `src-tauri/tauri.conf.json`
 Tauri window configuration:
@@ -207,9 +237,10 @@ Tauri window configuration:
 ### `backend/main.py`
 Core AI logic:
 - `DropletSystem` class: ONNX session, ByteTrack tracker, calibration
-- `calculate_stats()`: WHO volume-weighted statistics (Dv10, Dv50, Dv90, SPAN)
-- `_build_excel()`: Styled Excel report generation
+- `calculate_stats()`: WHO volume-weighted statistics
+- `_build_excel()`: Styled Excel report generation (Thai/English)
 - WebSocket frame streaming at ~30 FPS
+- LanguageConfig: Thai/English label support
 
 ---
 
@@ -234,7 +265,7 @@ Volume = (π / 6) × TrueDiameter³
 ```
 
 ### WHO Compliance Criteria
-- **VMD Target**: 10.0–30.0 µm
+- **VMD Target**: 10.0–30.0 µm (flexible up to 30.06)
 - **SPAN Target**: ≤ 2.0
 - **Minimum Count**: ≥ 200 droplets for statistical validity
 
@@ -260,10 +291,12 @@ Volume = (π / 6) × TrueDiameter³
 - **Project files**: `.drop` extension (ZIP containing `project.json` + Excel report)
 - **CSS**: Use CSS variables (`var(--bg-window)`, `var(--accent)`) — not hardcoded Tailwind colors
 - **Theme**: Dark mode via `.dark` class on root element
+- **WHO Range**: 10.00-30.00 µm (flexible up to 30.06)
 
 ### Testing Practices
 - Manual testing via UI (no automated test suite configured)
 - Backend logging via `logger.info()` for debugging inference pipeline
+- Integration tests available in `test_integration.py`
 
 ---
 
@@ -292,9 +325,14 @@ export const WS_STREAM = 'ws://new-host:8000/ws/stream';
 
 ### Modifying Excel Report
 Edit `_build_excel()` in `backend/main.py`. The function creates:
-- Summary sheet with per-slide metrics
+- Summary sheet with per-slide metrics (Thai/English)
 - Per-slide raw data sheets
-- "All Raw Data" consolidated sheet
+- Distribution charts
+
+### Adding New Language
+1. Add labels to `LanguageConfig` class in `backend/main.py`
+2. Add language option to frontend Settings
+3. Pass `language` parameter in save-project request
 
 ---
 
@@ -304,6 +342,7 @@ Edit `_build_excel()` in `backend/main.py`. The function creates:
 - Ensure `python main.py` is running in `backend/` directory
 - Check port 8000 is not blocked by firewall
 - Verify WebSocket URL in `src/config.ts`
+- Kill old Python processes: `taskkill /F /IM python.exe`
 
 ### ONNX Model Not Found
 - Models must be in `fileonnx/` directory at project root
@@ -320,6 +359,16 @@ Edit `_build_excel()` in `backend/main.py`. The function creates:
 - Try different camera indices (0, 1, 2...) via Settings → Hardware & Camera
 - Verify camera is not in use by another application
 
+### Excel Export Errors
+- Check `BarChart` and `Reference` are imported from `openpyxl.chart`
+- Clear Python cache: `del /q /s backend\__pycache__`
+- Restart backend after code changes
+
+### Auto-Save Issues
+- Check localStorage quota exceeded errors
+- Verify `Documents/DropDetect_Projects/` folder exists
+- Check disk space for auto-save files
+
 ---
 
 ## File Format Specifications
@@ -334,6 +383,7 @@ ZIP archive containing:
 {
   "project_name": "string",
   "target_size": 224,
+  "language": "th",
   "slides": [
     {
       "id": "uuid",
@@ -371,3 +421,119 @@ The app auto-detects system capabilities and adjusts inference frequency:
 | High | ≥ 12 GB | Every frame | 30 frames | 8 |
 
 Override via Settings → Hardware & Camera → Performance Profile.
+
+---
+
+## Auto-Save & Persistence
+
+### Features
+- **Auto-Save Interval**: 30 seconds (configurable)
+- **Dirty Flag**: Tracks unsaved changes
+- **Recovery Dialog**: Prompts to recover unsaved work on app restart
+- **Cleanup**: Auto-deletes auto-save files older than 7 days
+- **Dual Storage**: localStorage (for crash recovery) + disk (for backup)
+
+### State Persistence
+- Theme preference (dark/light/warm) → localStorage
+- Shell preference (macos/windows) → localStorage
+- Excel language (th/en) → Zustand store
+- Auto-save data → localStorage + disk
+
+---
+
+## Excel Export Features
+
+### Languages Supported
+- **Thai (default)**: Full Thai labels for all UI elements
+- **English**: Standard English labels
+
+### Sheet Structure
+1. **Summary**: Dashboard with stats table + VMD comparison chart
+2. **Slide 1, Slide 2, ...**: Individual droplet data + distribution chart
+
+### Column Headers (Thai)
+- ละอองที่ (No.)
+- ขนาด (µm) (Diameter)
+- ช่วง WHO (WHO Range)
+- ปริมาตร (µm³) (Volume)
+- Spread Factor
+- สะสม (%) (Cumulative %)
+
+### Styling
+- Default Excel style (no custom colors)
+- Thin borders on all cells
+- Green/Red font for Pass/Fail
+- Number formats: 0.000, 0.0%, 0.00
+
+---
+
+## Recent Updates (March 2025)
+
+### Phase 5: Professional Dark Theme
+- Replaced space/sci-fi theme with professional neutral dark
+- Blue accent (#3b82f6) instead of cyan-teal
+- Section-based sidebar layout
+- Removed glow/frosted glass effects
+
+### Excel Export Overhaul
+- Thai language support with LanguageConfig class
+- Side-by-side layout (dashboard left, tables right)
+- Distribution charts (BarChart)
+- WHO compliance: 10.00-30.00 µm (flexible up to 30.06)
+
+### Auto-Save System
+- 30-second interval auto-save
+- Recovery dialog on app restart
+- Dirty flag tracking
+- Cleanup mechanism for old files
+- Status bar indicator
+
+### SessionDropletTable Updates
+- Shows all droplets from selected slide
+- Columns: ID | Size | WHO | Source
+- Source icons: AI 🧠 / Manual ✏️ / Slide 📊
+- WHO compliance badge with flexible range
+
+---
+
+## Integration Test
+
+Run integration tests to verify frontend-backend connection:
+
+```powershell
+cd C:\Users\h4n\Desktop\webappsdesktop
+C:\Users\h4n\Desktop\webappsdesktop\backend\venv\Scripts\python test_integration.py
+```
+
+Expected output:
+```
+✓ PASS: Backend Connection
+✓ PASS: Save Project (Thai)
+✓ PASS: Save Project (English)
+✓ PASS: Language Config
+
+Total: 4/4 tests passed
+🎉 All integration tests passed!
+```
+
+---
+
+## Quick Start Checklist
+
+1. ✅ Install Node.js, Rust, Python 3.9+
+2. ✅ Run `npm install` in project root
+3. ✅ Start backend: `cd backend && .\venv\Scripts\activate && python main.py`
+4. ✅ Start frontend: `npm run tauri dev`
+5. ✅ Configure camera in Settings → Hardware & Camera
+6. ✅ Select language in Report mode → Excel Language dropdown
+7. ✅ Export Excel report with Thai/English labels
+
+---
+
+## Contact & Support
+
+For issues or questions, refer to:
+- `CLAUDE.md` - Development guidelines
+- `project_logic_summary.md` - System workflow documentation
+- `test_integration.py` - Integration test script
+- Backend logs for AI inference debugging

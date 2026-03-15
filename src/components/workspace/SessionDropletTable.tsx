@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Brain, Edit3, Filter, Trash2, BarChart2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Brain, Edit3, Filter, Trash2, BarChart2, CheckSquare, Square as SquareIcon } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useDraggable } from '../../hooks/useDraggable';
 
@@ -28,9 +28,17 @@ const SessionDropletTable: React.FC = () => {
     isSessionTablePoppedOut, setSessionTablePoppedOut,
     sessionTablePosition, setSessionTablePosition,
     activeSlideId, slides,
-    removeSessionDroplet,
+    removeSessionDroplet, removeSessionDroplets,
     snapshotSourceFilter, setSnapshotSourceFilter,
   } = useAppStore();
+
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isSelectMode, setIsSelectMode] = useState(false);
+
+  // Clear selection when filter changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [snapshotSourceFilter]);
 
   const { onMouseDown } = useDraggable(sessionTablePosition, setSessionTablePosition);
   if (!isSessionTablePoppedOut) return null;
@@ -80,6 +88,31 @@ const SessionDropletTable: React.FC = () => {
   const sessionWhoColor = sessionWhoPass ? 'var(--mac-green)' : 'var(--mac-orange)';
   const sessionWhoText = sessionWhoPass ? 'Pass' : 'Review';
 
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const deletable = filteredData.filter(d => d.source !== 'Slide');
+    if (selectedIds.size === deletable.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(deletable.map(d => d.id)));
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    removeSessionDroplets(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setIsSelectMode(false);
+  };
+
   // Compute distribution
   const binCounts = WHO_BINS.map(b =>
     filteredData.filter(d => d.diameter >= b.min && d.diameter < b.max).length
@@ -89,7 +122,7 @@ const SessionDropletTable: React.FC = () => {
   return (
     <div
       style={{ left: `${sessionTablePosition.x}px`, top: `${sessionTablePosition.y}px`, position: 'fixed' }}
-      className="z-[900] w-[360px] bg-[var(--bg-window)] rounded-[5px] mac-dialog-shadow border border-[var(--border-strong)] flex flex-col overflow-hidden select-none animate-in zoom-in-95 duration-200"
+      className="z-[100] w-[360px] bg-[var(--bg-window)] rounded-[5px] mac-dialog-shadow border border-[var(--border-strong)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 pointer-events-auto"
     >
       {/* ── Header ─── */}
       <div
@@ -118,15 +151,40 @@ const SessionDropletTable: React.FC = () => {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setSessionTablePoppedOut(false)}
-          className="w-5 h-5 rounded-[3px] flex items-center justify-center transition-all"
-          style={{ color: 'var(--text3)' }}
-          onMouseEnter={e => { (e.target as HTMLElement).closest('button')!.style.background = 'rgba(255,79,106,0.15)'; (e.target as HTMLElement).closest('button')!.style.color = 'var(--mac-red)'; }}
-          onMouseLeave={e => { (e.target as HTMLElement).closest('button')!.style.background = ''; (e.target as HTMLElement).closest('button')!.style.color = 'var(--text3)'; }}
-        >
-          <X size={12} />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Select mode toggle */}
+          {total > 0 && (
+            <button
+              onClick={() => { setIsSelectMode(!isSelectMode); setSelectedIds(new Set()); }}
+              className="w-5 h-5 rounded-[3px] flex items-center justify-center transition-all"
+              style={{ color: isSelectMode ? 'var(--accent-text)' : 'var(--text3)', background: isSelectMode ? 'var(--bg-active)' : '' }}
+              title={isSelectMode ? 'Exit select mode' : 'Select multiple'}
+            >
+              <CheckSquare size={11} />
+            </button>
+          )}
+          {/* Delete selected */}
+          {isSelectMode && selectedIds.size > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              className="flex items-center gap-0.5 px-1.5 h-5 rounded-[3px] text-[9px] font-bold transition-all"
+              style={{ background: 'rgba(255,79,106,0.12)', color: 'var(--mac-red)' }}
+              title={`Delete ${selectedIds.size} selected`}
+            >
+              <Trash2 size={9} />
+              {selectedIds.size}
+            </button>
+          )}
+          <button
+            onClick={() => setSessionTablePoppedOut(false)}
+            className="w-5 h-5 rounded-[3px] flex items-center justify-center transition-all"
+            style={{ color: 'var(--text3)' }}
+            onMouseEnter={e => { (e.target as HTMLElement).closest('button')!.style.background = 'rgba(255,79,106,0.15)'; (e.target as HTMLElement).closest('button')!.style.color = 'var(--mac-red)'; }}
+            onMouseLeave={e => { (e.target as HTMLElement).closest('button')!.style.background = ''; (e.target as HTMLElement).closest('button')!.style.color = 'var(--text3)'; }}
+          >
+            <X size={12} />
+          </button>
+        </div>
       </div>
 
       {/* ── Stats strip ─── */}
@@ -194,6 +252,16 @@ const SessionDropletTable: React.FC = () => {
         <table className="w-full text-[11px] border-collapse">
           <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface2)' }}>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {isSelectMode && (
+                <th className="w-6 px-1 py-1.5">
+                  <button onClick={toggleSelectAll} className="flex items-center justify-center w-full">
+                    {selectedIds.size === filteredData.filter(d => d.source !== 'Slide').length && selectedIds.size > 0
+                      ? <CheckSquare size={11} style={{ color: 'var(--accent-text)' }} />
+                      : <SquareIcon size={11} style={{ color: 'var(--text4)' }} />
+                    }
+                  </button>
+                </th>
+              )}
               <th className="px-2 py-1.5 text-left w-8">
                 <span className="font-instrument text-[8px] uppercase tracking-widest" style={{ color: 'var(--text4)' }}>ID</span>
               </th>
@@ -212,7 +280,7 @@ const SessionDropletTable: React.FC = () => {
           <tbody>
             {total === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-10 text-center">
+                <td colSpan={isSelectMode ? 6 : 5} className="px-3 py-10 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <BarChart2 size={20} style={{ color: 'var(--text4)', opacity: 0.4 }} />
                     <span className="font-instrument text-[10px]" style={{ color: 'var(--text4)' }}>No data captured yet</span>
@@ -224,12 +292,25 @@ const SessionDropletTable: React.FC = () => {
               [...filteredData].reverse().map((d, idx) => {
                 const isOut = !isWhoCompliant(d.diameter);
                 const rowNum = total - idx;
+                const isSelected = selectedIds.has(d.id);
                 return (
                   <tr
                     key={`${d.source}-${d.id}-${idx}`}
                     className="group transition-colors border-b border-[var(--separator)] hover:bg-[var(--bg-hover)]"
-                    style={{ background: rowNum % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface2)' }}
+                    style={{
+                      background: isSelected ? 'var(--bg-active)' : rowNum % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface2)',
+                    }}
+                    onClick={isSelectMode && d.source !== 'Slide' ? () => toggleSelect(d.id) : undefined}
                   >
+                    {isSelectMode && (
+                      <td className="w-6 px-1 py-1.5 text-center">
+                        {d.source !== 'Slide' ? (
+                          isSelected
+                            ? <CheckSquare size={11} style={{ color: 'var(--accent-text)' }} />
+                            : <SquareIcon size={11} style={{ color: 'var(--text4)' }} />
+                        ) : null}
+                      </td>
+                    )}
                     <td className="px-2 py-1.5 text-left font-instrument text-[9px]" style={{ color: 'var(--text4)' }}>
                       {rowNum}
                     </td>
@@ -265,7 +346,7 @@ const SessionDropletTable: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-1 py-1 w-8">
-                      {d.source !== 'Slide' && (
+                      {d.source !== 'Slide' && !isSelectMode && (
                         <button
                           onClick={() => removeSessionDroplet(d.id)}
                           title="Remove"
