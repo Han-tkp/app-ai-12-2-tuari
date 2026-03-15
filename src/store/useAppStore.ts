@@ -22,7 +22,7 @@ const LS_KEYS = {
 
 // ── Restore persisted preferences ────────────────────────────────────────────
 const _storedTheme = (localStorage.getItem(LS_KEYS.THEME) as 'dark' | 'light' | 'warm') || 'light';
-const _storedShell = (localStorage.getItem(LS_KEYS.SHELL) as 'macos' | 'windows') || 'macos';
+const _storedShell = (localStorage.getItem(LS_KEYS.SHELL) as 'macos' | 'windows') || 'windows';
 const _storedAnnotationFadeDelay = parseInt(localStorage.getItem(LS_KEYS.ANNOTATION_FADE_DELAY) || '1500', 10);
 const _storedExportPath = localStorage.getItem(LS_KEYS.EXPORT_PATH) || '';
 const _storedAIConfidence = parseFloat(localStorage.getItem(LS_KEYS.AI_CONFIDENCE) || '0.25');

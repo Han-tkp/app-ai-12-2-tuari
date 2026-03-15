@@ -1,5 +1,26 @@
 # DropDetect AI — Release Notes
 
+## v2.0.5 (2026-03-15)
+
+### New: Start Screen (Welcome Dashboard)
+- Professional welcome screen inspired by VS Code / Adobe — no more blank workspace on launch
+- **Quick Actions**: New Live Camera Project, Import Media Project, Open Existing Project
+- **New Project Dialog**: Set project name + choose objective lens (4x/10x) before entering workspace
+- **Recent Projects**: Shows last 10 opened .drop files with name, path, date, and slide count
+- **Sidebar Navigation**: Home + Settings access from start screen
+- **File > Start Screen**: Return to welcome screen at any time from workspace
+
+### Fixes
+- Default shell changed from macOS to **Windows** style
+- Recent project tracking on every file open/save
+
+### Download Website
+- Migrated from static HTML (GitHub Pages) to **React + TypeScript + Tailwind CSS + Vite**
+- Deployed to **Cloudflare Pages** (zero-cost, unlimited bandwidth)
+- GitHub Releases API integration for real-time download links and file sizes
+
+---
+
 ## v2.0.4 (2026-03-15)
 
 ### Installation & UX Fixes

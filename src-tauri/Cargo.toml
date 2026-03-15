@@ -1,6 +1,6 @@
 [package]
 name = "dropdetect-ai"
-version = "2.0.4"
+version = "2.0.5"
 description = "DropDetect AI - Professional spray droplet analysis per WHO standards"
 authors = ["DropDetect AI"]
 edition = "2021"

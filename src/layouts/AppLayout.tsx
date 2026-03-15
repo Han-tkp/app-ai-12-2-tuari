@@ -3,8 +3,9 @@ import Sidebar from '../components/sidebar/Sidebar';
 import TopDashboard from '../components/dashboard/TopDashboard';
 import Workspace from '../components/workspace/Workspace';
 import SettingsWindow from '../components/SettingsWindow';
+import StartScreen, { addRecentProject } from '../components/StartScreen';
 import { useAppStore } from '../store/useAppStore';
-import { ChevronDown, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X, Cloud, CloudOff, AlertCircle } from 'lucide-react';
+import { ChevronDown, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X, Cloud, CloudOff, AlertCircle, Home } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AUTO_SAVE_INTERVAL } from '../store/useAppStore';
@@ -26,6 +27,7 @@ const AppLayout: React.FC = () => {
   const [isFileMenuOpen, setFileMenuOpen] = useState(false);
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [showStartScreen, setShowStartScreen] = useState(true);
 
   // Modal states for file operations
   const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
@@ -130,6 +132,7 @@ const AppLayout: React.FC = () => {
 
   const handleNewProject = () => {
     setFileMenuOpen(false);
+    setShowStartScreen(false);
     setModalInput('Untitled Project');
     setModalType('new');
   };
@@ -137,6 +140,7 @@ const AppLayout: React.FC = () => {
   const confirmNewProject = async () => {
     if (modalInput.trim()) {
       await newProject(modalInput.trim());
+      setShowStartScreen(false);
     }
     setModalType(null);
   };
@@ -154,6 +158,13 @@ const AppLayout: React.FC = () => {
         if (response.ok) {
           const data = await response.json();
           loadProjectData(data);
+          addRecentProject({
+            name: data.project_name || 'Unknown',
+            path: selected,
+            lastOpened: Date.now(),
+            slideCount: data.slides?.length,
+          });
+          setShowStartScreen(false);
         } else {
           console.error('Failed to load project file');
         }
@@ -478,6 +489,8 @@ const AppLayout: React.FC = () => {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setFileMenuOpen(false)}></div>
                   <div className="absolute top-full left-0 mt-1 w-64 bg-[var(--bg-sidebar)] border border-[var(--border-strong)] rounded-[5px] z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100 origin-top-left" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+                    <MenuItem icon={<Home size={14}/>} label="Start Screen" onClick={() => { setFileMenuOpen(false); setShowStartScreen(true); }} />
+                    <div className="h-px bg-[var(--separator)] my-1.5 mx-2"></div>
                     <MenuItem icon={<FilePlus size={14}/>} label="New Project..." shortcut="Ctrl+N" onClick={handleNewProject} />
                     <MenuItem icon={<FolderOpen size={14}/>} label="Open Project..." shortcut="Ctrl+O" onClick={handleOpenProject} />
                     <div className="h-px bg-[var(--separator)] my-1.5 mx-2"></div>
@@ -547,21 +560,30 @@ const AppLayout: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0">
-        <aside className="w-[260px] flex flex-col shrink-0 border-r transition-colors" style={{ backgroundColor: 'var(--bg-sidebar)', backdropFilter: 'var(--blur)', WebkitBackdropFilter: 'var(--blur)', borderColor: 'var(--border)' }}>
-          <Sidebar />
-        </aside>
+      {showStartScreen ? (
+        <div className="flex-1 min-h-0">
+          <StartScreen
+            onEnterWorkspace={() => setShowStartScreen(false)}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          <aside className="w-[260px] flex flex-col shrink-0 border-r transition-colors" style={{ backgroundColor: 'var(--bg-sidebar)', backdropFilter: 'var(--blur)', WebkitBackdropFilter: 'var(--blur)', borderColor: 'var(--border)' }}>
+            <Sidebar />
+          </aside>
 
-        <main className="flex-1 flex flex-col min-w-0">
-          <header className="h-[54px] border-b shrink-0 transition-colors" style={{ backgroundColor: 'var(--bg-titlebar)', backdropFilter: 'var(--blur)', WebkitBackdropFilter: 'var(--blur)', borderColor: 'var(--border)' }}>
-            <TopDashboard />
-          </header>
+          <main className="flex-1 flex flex-col min-w-0">
+            <header className="h-[54px] border-b shrink-0 transition-colors" style={{ backgroundColor: 'var(--bg-titlebar)', backdropFilter: 'var(--blur)', WebkitBackdropFilter: 'var(--blur)', borderColor: 'var(--border)' }}>
+              <TopDashboard />
+            </header>
 
-          <div className="flex-1 relative overflow-hidden bg-[var(--bg-viewport)] shadow-inner">
-            <Workspace />
-          </div>
-        </main>
-      </div>
+            <div className="flex-1 relative overflow-hidden bg-[var(--bg-viewport)] shadow-inner">
+              <Workspace />
+            </div>
+          </main>
+        </div>
+      )}
     </div>
   );
 };
