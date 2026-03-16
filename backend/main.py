@@ -1,3 +1,4 @@
+import sys
 import cv2
 import asyncio
 import base64
@@ -24,7 +25,13 @@ logger = logging.getLogger("dropdetect")
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Resolve BASE_DIR for both development and PyInstaller bundled mode
+if getattr(sys, 'frozen', False):
+    # PyInstaller bundled: resources are in _MEIPASS (onefile) or exe directory (onedir)
+    BASE_DIR = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.dirname(sys.executable)
+else:
+    # Development mode: backend/ -> project root
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ── Configure Logging ────────────────────────────────────────────────────────
 def setup_logging():

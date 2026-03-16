@@ -32,6 +32,16 @@
     "dialog:allow-save",
     "dialog:allow-message",
     "dialog:allow-confirm",
-    "dialog:allow-ask"
+    "dialog:allow-ask",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "dropdetect-backend",
+          "sidecar": true
+        }
+      ]
+    },
+    "shell:allow-kill"
   ]
 }

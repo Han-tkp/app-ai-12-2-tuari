@@ -33,6 +33,13 @@ __pycache__/
 # Tauri build output
 src-tauri/target/
 
+# Sidecar binaries (built by PyInstaller, too large for git)
+src-tauri/binaries/
+
+# PyInstaller build artifacts
+backend/build/
+backend/dist/
+
 # Tauri mobile icons (not needed for Windows desktop)
 src-tauri/icons/android/
 src-tauri/icons/ios/
