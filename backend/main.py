@@ -1,4 +1,12 @@
 import sys
+import os
+
+# For PyInstaller: set matplotlib cache to persistent location (avoids slow font cache rebuild)
+if getattr(sys, 'frozen', False):
+    _mpl_cache = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'DropDetect', 'mpl_cache')
+    os.makedirs(_mpl_cache, exist_ok=True)
+    os.environ['MPLCONFIGDIR'] = _mpl_cache
+
 import cv2
 import asyncio
 import base64
@@ -7,7 +15,6 @@ import onnxruntime as ort
 import supervision as sv
 import psutil
 import json
-import os
 import zipfile
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side

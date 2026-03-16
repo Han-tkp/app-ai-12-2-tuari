@@ -35,7 +35,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'PIL.ImageTk'],
+    excludes=['tkinter', 'PIL.ImageTk'],
     noarchive=False,
 )
 
