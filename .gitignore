@@ -82,11 +82,17 @@ datafordevapp/
 hardwaremicroscrope/
 theme/
 uiux/
-website/
 e2e_tests/
 .agents/
 .claude/
 src-tauri/
+bg_firstinstall_loading/
+
+# Website build artifacts (source is kept for Cloudflare Pages deploy)
+website/node_modules/
+website/dist/
+website/public/screenshots/
+website/public/icon.png
 
 # Icon source (keep in repo but not needed for build)
 # iconapp/

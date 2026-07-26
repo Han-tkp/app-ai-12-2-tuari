@@ -1,0 +1,317 @@
+import { Language } from '../types';
+
+export const translations: Record<Language, Record<string, string>> = {
+  th: {
+    // Navigation
+    'nav.brand': 'DropDetect AI',
+    'nav.home': 'หน้าหลัก',
+    'nav.downloads': 'ดาวน์โหลด',
+    'nav.gallery': 'ภาพตัวอย่าง',
+    'nav.manual': 'คู่มือใช้งาน',
+    'nav.github': 'ซอร์สโค้ด',
+    
+    // Header
+    'header.tagline': 'ระบบวิเคราะห์ละอองสารเคมีเรียลไทม์ตามมาตรฐาน WHO',
+    'header.version': 'v1.2.2',
+
+    // Hero Section
+    'hero.badge': '🚀 ซอฟต์แวร์วิเคราะห์ละอองสารเคมีด้วย AI (v1.2.2)',
+    'hero.title': 'วิเคราะห์ขนาดละอองสารเคมีอย่างแม่นยำ',
+    'hero.subtitle': 'ระบบตรวจจับละอองเคมีด้วย YOLOv8 + ByteTrack ผ่านกล้องจุลทรรศน์ USB แบบเรียลไทม์ คำนวณค่า VMD (Dv0.1, Dv0.5, Dv0.9) และ SPAN ตามมาตรฐาน WHO',
+    'hero.btnDownload': 'ดาวน์โหลดใช้งานฟรี',
+    'hero.btnManual': 'อ่านคู่มือการใช้งาน',
+    'hero.supportedPlatforms': 'รองรับระบบปฏิบัติการ Windows (64-bit) และ Linux (Debian, AppImage, Fedora)',
+
+    // Features Section
+    'features.title': 'เครื่องมือวิเคราะห์ระดับมืออาชีพ',
+    'features.subtitle': 'ทุกฟังก์ชันที่คุณต้องการสำหรับการวิเคราะห์ขนาดละอองสารเคมีตามมาตรฐานสากล',
+    'features.aiTitle': 'การตรวจจับละอองเคมีด้วย AI',
+    'features.aiDesc': 'โครงข่ายประสาทเทียม YOLOv8 ตรวจจับและวัดขนาดหยดละอองสารเคมีแบบเรียลไทม์จากกล้องจุลทรรศน์ด้วยความเร็วสูงสุด 30 FPS',
+    'features.trackingTitle': 'ระบบติดตามวัตถุเรียลไทม์ ByteTrack',
+    'features.trackingDesc': 'อัลกอริทึม ByteTrack มอบ ID ประจำหยดละอองข้ามเฟรม ป้องกันการนับซ้ำเพื่อผลสถิติที่แม่นยำสูง',
+    'features.whoTitle': 'การคำนวณสถิติมาตรฐาน WHO',
+    'features.whoDesc': 'คำนวณการกระจายปริมาตร Dv0.1, Dv0.5 (VMD), Dv0.9, ค่า SPAN และการจัดหมวดหมู่คุณภาพสเปรย์ตามเกณฑ์มาตรฐาน WHO',
+    'features.excelTitle': 'รายงานผล Excel และไฟล์โครงการ',
+    'features.excelDesc': 'ส่งออกรายงาน Excel (OpenPyXL) พร้อมภาพสไลด์และพารามิเตอร์การตั้งค่า หรือบันทึกไฟล์โครงการ .drop',
+
+    // Requirements Section
+    'requirements.title': 'ความต้องการของระบบ',
+    'requirements.subtitle': 'ข้อกำหนดขั้นต่ำของเครื่องคอมพิวเตอร์สำหรับการใช้งาน DropDetect AI',
+    'requirements.cpuLabel': 'หน่วยประมวลผล (CPU)',
+    'requirements.cpuVal': 'Intel Core i5 / AMD Ryzen 5 ขึ้นไป (64-bit)',
+    'requirements.ramLabel': 'หน่วยความจำหลัก (RAM)',
+    'requirements.ramVal': '8 GB ขั้นต่ำ (แนะนำ 16 GB)',
+    'requirements.osLabel': 'ระบบปฏิบัติการ (OS)',
+    'requirements.osVal': 'Windows 10 / 11 (64-bit) หรือ Linux (Ubuntu 20.04+, Fedora 36+)',
+    'requirements.cameraLabel': 'กล้องจุลทรรศน์ (Camera)',
+    'requirements.cameraVal': 'กล้องจุลทรรศน์ USB UVC (เลนส์ 4x / 10x)',
+
+    // Download Center (R3)
+    'download.title': 'ดาวน์โหลด DropDetect AI (v1.2.2)',
+    'download.subtitle': 'เลือกรุ่นแพ็กเกจที่เหมาะกับระบบปฏิบัติการของคุณ',
+    'download.yourOs': 'ระบบปฏิบัติการของคุณ',
+    'download.sysReqs': 'ความต้องการระบบขั้นต่ำ',
+    'download.checksum': 'SHA256 Checksum',
+    'download.cmdLabel': 'คำสั่งติดตั้งทางเทอร์มินัล',
+    'download.winTitle': 'Windows Installer (.exe)',
+    'download.winDesc': 'ตัวติดตั้งมาตรฐาน NSIS สำหรับ Windows 10 / 11 (64-bit) พร้อมเอนจิน PyTorch ในตัว',
+    'download.winCmd': 'ดับเบิลคลิกไฟล์ DropDetect_AI_Setup_v1.2.2.exe เพื่อเริ่มการติดตั้ง',
+    'download.linuxDebTitle': 'Debian / Ubuntu Package (.deb)',
+    'download.linuxDebDesc': 'แพ็กเกจ .deb สำหรับ Ubuntu 20.04+, Debian 11+, Linux Mint',
+    'download.linuxDebCmd': 'sudo dpkg -i dropdetect-ai_1.2.2_amd64.deb',
+    'download.linuxAppImageTitle': 'Linux AppImage Executable (.AppImage)',
+    'download.linuxAppImageDesc': 'ไฟล์ไบนารีสแตนด์อโลน สามารถรันได้ทันทีโดยไม่ต้องติดตั้งบนทุก Linux Distros',
+    'download.linuxAppImageCmd': 'chmod +x DropDetect_AI-1.2.2-x86_64.AppImage && ./DropDetect_AI-1.2.2-x86_64.AppImage',
+    'download.linuxRpmTitle': 'Fedora / RedHat Package (.rpm)',
+    'download.linuxRpmDesc': 'แพ็กเกจ .rpm สำหรับ Fedora 36+, Red Hat Enterprise Linux, CentOS Stream',
+    'download.linuxRpmCmd': 'sudo dnf install dropdetect-ai-1.2.2-1.x86_64.rpm',
+    'download.fileSize': 'ขนาดไฟล์',
+    'download.btn': 'ดาวน์โหลด',
+    'download.procLabel': 'หน่วยประมวลผล (CPU):',
+    'download.procVal': 'Intel Core i5 / AMD Ryzen 5 (2.5 GHz+) 64-bit',
+    'download.ramLabel': 'หน่วยความจำ (RAM):',
+    'download.ramVal': '8 GB ขั้นต่ำ (แนะนำ 16 GB)',
+    'download.storageLabel': 'พื้นที่จัดเก็บ & การ์ดจอ:',
+    'download.storageVal': 'พื้นที่ว่าง 2 GB, การ์ดจอรองรับ OpenGL 3.3',
+    'download.opticsLabel': 'กล้องจุลทรรศน์ / สัญญาณภาพ:',
+    'download.opticsVal': 'กล้องจุลทรรศน์ USB UVC (เลนส์วัตถุ 4x / 10x)',
+
+    // Footer
+    'footer.description': 'DropDetect AI - แอปพลิเคชันเดสก์ท็อประดับมืออาชีพสำหรับการวิเคราะห์และวัดขนาดหยดละอองสารเคมีผ่านกล้องจุลทรรศน์ด้วยปัญญาประดิษฐ์',
+    'footer.quickLinks': 'ลิงก์ด่วน',
+    'footer.platforms': 'ระบบที่รองรับ',
+    'footer.microscope': 'กล้องจุลทรรศน์ USB UVC (4x/10x)',
+    'footer.copyright': '© 2026 DropDetect AI. สงวนลิขสิทธิ์ทั้งหมด',
+    'footer.developedFor': 'พัฒนาสำหรับการวิเคราะห์ละอองสารเคมีทางการเกษตรและสาธารณสุข',
+
+    // Gallery / Showcase (R2)
+    'gallery.title': 'ภาพตัวอย่างการใช้งาน DropDetect AI',
+    'gallery.subtitle': 'ระบบอินเทอร์เฟซ ฟังก์ชันตรวจจับเรียลไทม์ และรายงานผลการวิเคราะห์',
+    'gallery.all': 'ทั้งหมด',
+    'gallery.live': 'ตรวจจับเรียลไทม์',
+    'gallery.analysis': 'วิเคราะห์และสถิติ',
+    'gallery.import': 'นำเข้าสื่อออฟไลน์',
+    'gallery.export': 'ส่งออกรายงาน Excel',
+    'gallery.preview': 'ดูภาพขนาดใหญ่',
+    'gallery.prevImage': 'ภาพก่อนหน้า',
+    'gallery.nextImage': 'ภาพถัดไป',
+    'gallery.closeModal': 'ปิด',
+
+    // User Manual (R4)
+    'manual.title': 'คู่มือการใช้งาน DropDetect AI',
+    'manual.subtitle': 'คำแนะนำขั้นตอนอย่างละเอียดสำหรับการติดตั้ง การตั้งค่ากล้อง และการใช้งานทุกฟังก์ชัน',
+    'manual.badge': 'เอกสารคู่มือทางเทคนิค',
+    'manual.menuTitle': 'เมนูนำทาง',
+    'manual.activeSection': 'หัวข้อคู่มือที่เลือก',
+    'manual.installGuide': '1. การติดตั้งโปรแกรม (Installation Guide)',
+    'manual.microscopeGuide': '2. การตั้งค่ากล้องจุลทรรศน์และเลนส์ (Microscope Setup)',
+    'manual.liveAIGuide': '3. การตรวจจับสดด้วย AI และสถิติ WHO (Live AI & WHO Analytics)',
+    'manual.importGuide': '4. การนำเข้าไฟล์ภาพและวิดีโอออฟไลน์ (Offline Media Import)',
+    'manual.excelGuide': '5. การส่งออกรายงาน Excel และไฟล์โครงการ (Excel & Project Export)',
+    
+    // Manual Section 1: Installation
+    'manual.sec1.title': '1. คู่มือการติดตั้งซอฟต์แวร์ (Windows & Linux)',
+    'manual.sec1.subtitle': 'ขั้นตอนการติดตั้งอย่างละเอียดสำหรับ Windows .exe, Debian .deb, Linux AppImage และ Fedora .rpm',
+    'manual.sec1.winTitle': 'การติดตั้งบน Windows (.exe Installer)',
+    'manual.sec1.winStep1': '1. ดาวน์โหลด DropDetect_AI_Setup_v1.2.2.exe จากศูนย์ดาวน์โหลด',
+    'manual.sec1.winStep2': '2. ดับเบิลคลิกไฟล์ติดตั้งเพื่อเริ่ม NSIS Installation Wizard',
+    'manual.sec1.winStep3': '3. เลือกโฟลเดอร์ปลายทาง (ค่าเริ่มต้น: C:\\Program Files\\DropDetect AI) แล้วคลิก Install',
+    'manual.sec1.winStep4': '4. ระบบจะแตกไฟล์เอนจิน PyTorch และ dependencies ต่างๆ โดยอัตโนมัติ',
+    'manual.sec1.debTitle': 'การติดตั้งบน Debian / Ubuntu (.deb)',
+    'manual.sec1.debDesc': 'เปิดเทอร์มินัลและรันคำสั่งตัวจัดการแพ็กเกจ dpkg:',
+    'manual.sec1.appImageTitle': 'การรันบน Linux ด้วย AppImage (.AppImage)',
+    'manual.sec1.appImageDesc': 'กำหนดสิทธิ์การประมวลผล (Execution Permission) และรันได้ทันทีบน Linux ทุกรุ่น:',
+    'manual.sec1.rpmTitle': 'การติดตั้งบน Fedora / RedHat (.rpm)',
+    'manual.sec1.rpmDesc': 'ติดตั้งผ่านตัวจัดการแพ็กเกจ dnf หรือ rpm:',
+
+    // Manual Section 2: Microscope Setup
+    'manual.sec2.title': '2. คู่มือการตั้งค่ากล้องจุลทรรศน์และเลนส์',
+    'manual.sec2.subtitle': 'การปรับเทียบกล้องจุลทรรศน์ USB UVC, เลนส์วัตถุ 4x และ 10x, สเกลพิกเซล และค่า Spread Factor ตามมาตรฐาน WHO',
+    'manual.sec2.lensTitle': 'การติดตั้งฮาร์ดแวร์และชุดเลนส์ (เลนส์ 4x / 10x)',
+    'manual.sec2.lensItem1': 'เชื่อมต่อกล้องจุลทรรศน์ USB UVC เข้ากับพอร์ต USB 3.0',
+    'manual.sec2.lensItem2': 'วางสไลด์แก้วตัวอย่างละอองสารเคมีไว้ใต้เลนส์วัตถุขนาด 4x หรือ 10x',
+    'manual.sec2.lensItem3': 'ปรับแสงไฟและความคมชัด (Focus Dial) จนเห็นขอบหยดละอองทรงกลมชัดเจน',
+    'manual.sec2.scaleTitle': 'การปรับเทียบสเกลพิกเซล (2.79e-7 ม./พิกเซล) และ Spread Factor',
+    'manual.sec2.scaleDesc1': 'ค่าปรับเทียบมาตรฐานสำหรับเลนส์ 10x: 2.79e-7 เมตร/พิกเซล (0.279 µm/px)',
+    'manual.sec2.scaleDesc2': 'ตั้งค่าตัวคูณ Spread Factor ตามมาตรฐาน WHO ตามพื้นผิวสไลด์ตัวอย่าง (เช่น กระดาษ Kromekote vs สไลด์แก้ว)',
+
+    // Manual Section 3: Live AI & WHO Analytics
+    'manual.sec3.title': '3. คู่มือการตรวจจับสดด้วย AI และสถิติมาตรฐาน WHO',
+    'manual.sec3.subtitle': 'การวัดขนาดละอองเคมีแบบเรียลไทม์ด้วยโครงข่ายประสาทเทียม YOLOv8 และระบบติดตามวัตถุ ByteTrack',
+    'manual.sec3.yoloTitle': 'เอนจินติดตามวัตถุเรียลไทม์ YOLOv8 + ByteTrack',
+    'manual.sec3.yoloDesc': 'เอนจิน AI ตรวจจับวัตถุสดและระบุ ID ประจำหยดละอองข้ามเฟรมด้วย ByteTrack ใช้เครื่องมือ ROI เพื่อจำกัดพื้นที่ตรวจจับและลดสิ่งรบกวนขอบภาพ',
+    'manual.sec3.whoTitle': 'พารามิเตอร์การกระจายปริมาตรมาตรฐาน WHO (Dv0.1, Dv0.5 / VMD, Dv0.9, SPAN)',
+    'manual.sec3.whoDv05': 'Dv0.5 (VMD): เส้นผ่านศูนย์กลางมัธยฐานเชิงปริมาตร ซึ่ง 50% ของปริมาตรสเปรย์ประกอบด้วยละอองขนาดเล็กกว่า',
+    'manual.sec3.whoDv0109': 'Dv0.1 & Dv0.9: เส้นผ่านศูนย์กลางเชิงปริมาตร ณ เปอร์เซ็นไทล์ที่ 10 และ 90',
+    'manual.sec3.whoSpan': 'SPAN: ดัชนีความกว้างของการกระจายขนาดละออง คำนวณจากสูตร (Dv0.9 - Dv0.1) / Dv0.5',
+
+    // Manual Section 4: Offline Import
+    'manual.sec4.title': '4. คู่มือการนำเข้าไฟล์ภาพและวิดีโอออฟไลน์',
+    'manual.sec4.subtitle': 'การนำเข้าไฟล์ภาพและวิดีโอออฟไลน์ การประมวลผลแบบกลุ่ม และการควบคุมความเร็วการเล่น',
+    'manual.sec4.importTitle': 'การนำเข้าไฟล์สื่อด้วยระบบ Drag & Drop',
+    'manual.sec4.importDesc': 'ลากไฟล์ภาพ (PNG, JPG, TIFF) หรือวิดีโอบันทึก (MP4, AVI) ลงในพื้นที่ประมวลผล ปรับความเร็วการเล่นวิดีโอ (0.5x ถึง 4x) เพื่อการวิเคราะห์เฟรมที่แม่นยำ',
+
+    // Manual Section 5: Excel & Project Export
+    'manual.sec5.title': '5. คู่มือการส่งออกรายงาน Excel และไฟล์โครงการ',
+    'manual.sec5.subtitle': 'การสร้างรายงาน Excel รูปแบบมาตรฐานด้วย OpenPyXL และการบันทึกไฟล์โครงการ .drop',
+    'manual.sec5.excelTitle': 'การส่งออกรายงาน Excel ด้วย OpenPyXL',
+    'manual.sec5.excelDesc': 'ส่งออกแผ่นงานตรวจสอบที่สมบูรณ์ ตารางข้อมูลหยดละออง สถิติสรุป (Dv0.1, Dv0.5, Dv0.9, SPAN) และข้อมูลการปรับเทียบ ระบบบันทึกอัตโนมัติช่วยเก็บประวัติปลอดภัยในไฟล์ซิปโครงการ .drop',
+  },
+  en: {
+    // Navigation
+    'nav.brand': 'DropDetect AI',
+    'nav.home': 'Home',
+    'nav.downloads': 'Downloads',
+    'nav.gallery': 'Showcase',
+    'nav.manual': 'User Manual',
+    'nav.github': 'GitHub',
+    
+    // Header
+    'header.tagline': 'Real-Time Chemical Droplet Analysis per WHO Standards',
+    'header.version': 'v1.2.2',
+
+    // Hero Section
+    'hero.badge': '🚀 AI-Powered Chemical Droplet Analyzer (v1.2.2)',
+    'hero.title': 'Precision Droplet Size & Distribution Analysis',
+    'hero.subtitle': 'Real-time droplet detection & tracking using YOLOv8 + ByteTrack over USB microscopes. Calculates VMD (Dv0.1, Dv0.5, Dv0.9) and SPAN values per WHO specifications.',
+    'hero.btnDownload': 'Download Free',
+    'hero.btnManual': 'View Documentation',
+    'hero.supportedPlatforms': 'Supported on Windows 10/11 (64-bit) & Linux distributions (Debian, AppImage, Fedora)',
+
+    // Features Section
+    'features.title': 'Powerful Analysis Tools',
+    'features.subtitle': 'Everything you need for professional spray droplet analysis per WHO standards',
+    'features.aiTitle': 'AI Droplet Detection',
+    'features.aiDesc': 'YOLOv8 neural network detects and measures spray droplets in real-time from microscope camera feeds at up to 30 FPS.',
+    'features.trackingTitle': 'ByteTrack Real-Time Tracking',
+    'features.trackingDesc': 'ByteTrack multi-object tracking assigns persistent IDs across frames, preventing duplicate counting for accurate statistics.',
+    'features.whoTitle': 'WHO Standard Statistics',
+    'features.whoDesc': 'Volume-weighted analysis: Dv0.1, Dv0.5 (VMD), Dv0.9, SPAN, and spray quality classification per WHO guidelines.',
+    'features.excelTitle': 'Excel Reports & Project Archives',
+    'features.excelDesc': 'One-click export to Excel (OpenPyXL) with full session data, statistics, calibration info, or save as .drop project files.',
+
+    // Requirements Section
+    'requirements.title': 'System Requirements',
+    'requirements.subtitle': 'Minimum hardware & software specifications for running DropDetect AI',
+    'requirements.cpuLabel': 'Processor (CPU)',
+    'requirements.cpuVal': 'Intel Core i5 / AMD Ryzen 5 or better (64-bit)',
+    'requirements.ramLabel': 'Memory (RAM)',
+    'requirements.ramVal': '8 GB minimum (16 GB recommended)',
+    'requirements.osLabel': 'Operating System (OS)',
+    'requirements.osVal': 'Windows 10 / 11 (64-bit) or Linux (Ubuntu 20.04+, Fedora 36+)',
+    'requirements.cameraLabel': 'Microscope Camera',
+    'requirements.cameraVal': 'USB UVC Microscope Camera (4x / 10x objective lenses)',
+
+    // Download Center (R3)
+    'download.title': 'Download DropDetect AI (v1.2.2)',
+    'download.subtitle': 'Choose the appropriate binary package for your operating system',
+    'download.yourOs': 'Your Operating System',
+    'download.sysReqs': 'Minimum System Requirements',
+    'download.checksum': 'SHA256 Checksum',
+    'download.cmdLabel': 'Terminal Installation Command',
+    'download.winTitle': 'Windows Installer (.exe)',
+    'download.winDesc': 'Standard NSIS setup installer for Windows 10 / 11 (64-bit) with embedded PyTorch Engine',
+    'download.winCmd': 'Double-click DropDetect_AI_Setup_v1.2.2.exe to launch installer wizard',
+    'download.linuxDebTitle': 'Debian / Ubuntu Package (.deb)',
+    'download.linuxDebDesc': '.deb installer package for Ubuntu 20.04+, Debian 11+, Linux Mint',
+    'download.linuxDebCmd': 'sudo dpkg -i dropdetect-ai_1.2.2_amd64.deb',
+    'download.linuxAppImageTitle': 'Linux AppImage Executable (.AppImage)',
+    'download.linuxAppImageDesc': 'Standalone executable binary running across all Linux distributions without installation',
+    'download.linuxAppImageCmd': 'chmod +x DropDetect_AI-1.2.2-x86_64.AppImage && ./DropDetect_AI-1.2.2-x86_64.AppImage',
+    'download.linuxRpmTitle': 'Fedora / RedHat RPM (.rpm)',
+    'download.linuxRpmDesc': '.rpm package for Fedora 36+, Red Hat Enterprise Linux, CentOS Stream',
+    'download.linuxRpmCmd': 'sudo dnf install dropdetect-ai-1.2.2-1.x86_64.rpm',
+    'download.fileSize': 'File Size',
+    'download.btn': 'Download',
+    'download.procLabel': 'Processor (CPU):',
+    'download.procVal': 'Intel Core i5 / AMD Ryzen 5 (2.5 GHz+) 64-bit',
+    'download.ramLabel': 'Memory (RAM):',
+    'download.ramVal': '8 GB minimum (16 GB recommended)',
+    'download.storageLabel': 'Storage & GPU:',
+    'download.storageVal': '2 GB free space, OpenGL 3.3 compatible GPU',
+    'download.opticsLabel': 'Optics / Microscope:',
+    'download.opticsVal': 'USB UVC Microscope Camera (4x / 10x objective lens)',
+
+    // Footer
+    'footer.description': 'DropDetect AI - Professional desktop application for real-time chemical spray droplet analysis per WHO standards using microscopic AI vision.',
+    'footer.quickLinks': 'Quick Links',
+    'footer.platforms': 'Supported Platforms',
+    'footer.microscope': 'USB UVC Microscope (4x/10x Lenses)',
+    'footer.copyright': '© 2026 DropDetect AI. All rights reserved.',
+    'footer.developedFor': 'Built for Agricultural & Public Health Chemical Spray Droplet Audits.',
+
+    // Gallery / Showcase (R2)
+    'gallery.title': 'DropDetect AI Showcase & Interface',
+    'gallery.subtitle': 'Explore application screens, real-time tracking, and WHO report analytics',
+    'gallery.all': 'All Screens',
+    'gallery.live': 'Live AI Detection',
+    'gallery.analysis': 'Analytics & Stats',
+    'gallery.import': 'Offline Media Import',
+    'gallery.export': 'Excel Report Export',
+    'gallery.preview': 'Preview Fullscreen',
+    'gallery.prevImage': 'Previous Image',
+    'gallery.nextImage': 'Next Image',
+    'gallery.closeModal': 'Close',
+
+    // User Manual (R4)
+    'manual.title': 'DropDetect AI User Manual',
+    'manual.subtitle': 'Comprehensive step-by-step instructions for installation, hardware setup, and feature usage',
+    'manual.badge': 'Technical Documentation',
+    'manual.menuTitle': 'Navigation Menu',
+    'manual.activeSection': 'Active Guide Section',
+    'manual.installGuide': '1. Software Installation (Windows & Linux)',
+    'manual.microscopeGuide': '2. Microscope & Optics Setup',
+    'manual.liveAIGuide': '3. Live AI Tracking & WHO Analytics',
+    'manual.importGuide': '4. Offline Media Import & Processing',
+    'manual.excelGuide': '5. Excel Report Export & Project Files',
+
+    // Manual Section 1: Installation
+    'manual.sec1.title': '1. Software Installation Guide (Windows & Linux)',
+    'manual.sec1.subtitle': 'Detailed installation steps for Windows .exe, Debian .deb, Linux AppImage, and Fedora .rpm packages.',
+    'manual.sec1.winTitle': 'Windows Installation (.exe Installer)',
+    'manual.sec1.winStep1': '1. Download DropDetect_AI_Setup_v1.2.2.exe from the Download Center.',
+    'manual.sec1.winStep2': '2. Double-click the installer executable to launch the NSIS Installation Wizard.',
+    'manual.sec1.winStep3': '3. Select destination folder (default: C:\\Program Files\\DropDetect AI) and click Install.',
+    'manual.sec1.winStep4': '4. Embedded PyTorch Engine and Python dependencies will be extracted automatically.',
+    'manual.sec1.debTitle': 'Debian / Ubuntu Package Installation (.deb)',
+    'manual.sec1.debDesc': 'Open your terminal and run the dpkg package manager command:',
+    'manual.sec1.appImageTitle': 'Linux Universal AppImage (.AppImage)',
+    'manual.sec1.appImageDesc': 'Grant execution permissions and run directly across any Linux distribution:',
+    'manual.sec1.rpmTitle': 'Fedora / RedHat Package Installation (.rpm)',
+    'manual.sec1.rpmDesc': 'Install via dnf or rpm package manager:',
+
+    // Manual Section 2: Microscope Setup
+    'manual.sec2.title': '2. Microscope & Optics Setup Guide',
+    'manual.sec2.subtitle': 'Calibrating USB UVC microscope camera, 4x and 10x objective lenses, optical scale, and WHO spread factor.',
+    'manual.sec2.lensTitle': 'Hardware & Lens Setup (4x / 10x Optics)',
+    'manual.sec2.lensItem1': 'Connect your USB UVC camera microscope to a USB 3.0 port.',
+    'manual.sec2.lensItem2': 'Position the glass slide with chemical spray droplet sample under the 4x or 10x objective lens.',
+    'manual.sec2.lensItem3': 'Adjust illumination and focus dial until spray droplets show sharp, high-contrast circular boundaries.',
+    'manual.sec2.scaleTitle': 'Pixel Calibration Scale (2.79e-7 m/px) & Spread Factor',
+    'manual.sec2.scaleDesc1': 'Default calibration factor for 10x objective: 2.79e-7 meters/pixel (0.279 µm/px).',
+    'manual.sec2.scaleDesc2': 'Configure WHO spread factor multiplier based on target slide matrix (e.g. Kromekote paper vs glass slide spread factor adjustment).',
+
+    // Manual Section 3: Live AI & WHO Analytics
+    'manual.sec3.title': '3. Live AI Detection & WHO Analytics Guide',
+    'manual.sec3.subtitle': 'Real-time droplet measurement with YOLOv8 neural network and ByteTrack multi-object tracking.',
+    'manual.sec3.yoloTitle': 'YOLOv8 + ByteTrack Real-Time Tracking Engine',
+    'manual.sec3.yoloDesc': 'The AI engine performs live object detection and assigns persistent IDs to droplets using ByteTrack tracking. Use the interactive ROI tool to restrict detection area and eliminate edge artifacts.',
+    'manual.sec3.whoTitle': 'WHO Volumetric Parameters (Dv0.1, Dv0.5 / VMD, Dv0.9, SPAN)',
+    'manual.sec3.whoDv05': 'Dv0.5 (VMD): Volume Median Diameter where 50% of spray volume consists of smaller droplets.',
+    'manual.sec3.whoDv0109': 'Dv0.1 & Dv0.9: 10th and 90th percentile volume diameters.',
+    'manual.sec3.whoSpan': 'SPAN: Relative droplet size spectrum calculated as (Dv0.9 - Dv0.1) / Dv0.5.',
+
+    // Manual Section 4: Offline Import
+    'manual.sec4.title': '4. Offline Media Import & Processing Guide',
+    'manual.sec4.subtitle': 'Importing offline images and videos, batch processing, and playback controls.',
+    'manual.sec4.importTitle': 'Drag & Drop Media Import',
+    'manual.sec4.importDesc': 'Drag image files (PNG, JPG, TIFF) or video recordings (MP4, AVI) directly into the processing canvas. Adjust video playback speed controls (0.5x to 4x) for precise frame analysis.',
+
+    // Manual Section 5: Excel & Project Export
+    'manual.sec5.title': '5. Excel Exporting & Project Files Guide',
+    'manual.sec5.subtitle': 'Generating formatted Excel reports with OpenPyXL and saving .drop project archives.',
+    'manual.sec5.excelTitle': 'OpenPyXL Excel Report Exporting',
+    'manual.sec5.excelDesc': 'Export complete audit spreadsheets containing raw droplet tables, summary statistics (Dv0.1, Dv0.5, Dv0.9, SPAN), and calibration metadata. Auto-save workspace keeps history safe in .drop project zip archives.',
+  }
+};
+
