@@ -42,6 +42,14 @@
     ],
     "icon": "iconapp/DropDetect.ico"
   },
+  "linux": {
+    "target": [
+      "AppImage",
+      "deb"
+    ],
+    "category": "Science",
+    "icon": "iconapp/DropDetect_512.png"
+  },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
