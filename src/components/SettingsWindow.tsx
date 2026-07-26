@@ -4,7 +4,7 @@ import {
   RotateCcw, Check, FolderOpen, Upload, Trash2
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { open } from '@tauri-apps/plugin-dialog';
+import { useTranslation } from '../i18n';
 
 const SettingsWindow: React.FC = () => {
   const {
@@ -13,15 +13,19 @@ const SettingsWindow: React.FC = () => {
     lineThickness, fillOpacity, annotationColor,
     updateAnnotationSettings,
     aiConfidence, setAIConfidence,
-    theme, setTheme, shell, setShell, exportPath, setExportPath,
+    theme, setTheme, exportPath, setExportPath,
     settingsPosition, setSettingsPosition,
     hotkeyLiveAI, setHotkeyLiveAI,
     hotkeySnapshot, setHotkeySnapshot,
     hardwareProfile, profileOverride, ramGb, cpuCores, inferenceSkip,
-    setProfileOverride, isAIRunning,
+    setProfileOverride, isAIRunning, cameraIndex, setCameraIndex,
     snapshotDisplayDuration, setSnapshotDisplayDuration,
     annotationFadeDelay, setAnnotationFadeDelay,
+    appLanguage, setAppLanguage, uiScale, setUiScale,
+    setVideoControlsMode, videoControlsMode
   } = useAppStore();
+
+  const { t } = useTranslation();
 
   const [hasChanges, setHasChanges] = useState(false);
   const [profileApplied, setProfileApplied] = useState(false);
@@ -136,13 +140,12 @@ const SettingsWindow: React.FC = () => {
 
   const handleBrowse = async () => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
+      const result = await window.electron.showOpenDialog({
+        properties: ['openDirectory'],
         defaultPath: exportPath,
       });
-      if (selected && typeof selected === 'string') {
-        setExportPath(selected);
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        setExportPath(result.filePaths[0]);
         setHasChanges(true);
       }
     } catch (err) {
@@ -293,13 +296,13 @@ const SettingsWindow: React.FC = () => {
                         onClick={async () => {
                           setIsImportingModel(true);
                           try {
-                            const selected = await open({
-                              multiple: false,
+                            const result = await window.electron.showOpenDialog({
+                              properties: ['openFile'],
                               filters: [{ name: 'ONNX Model', extensions: ['onnx'] }]
                             });
-                            if (selected) {
-                              // Add to list (in real app, would copy file and load model)
-                              const fileName = String(selected).split(/[\\/]/).pop() || 'unknown.onnx';
+                            if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+                              const selected = result.filePaths[0];
+                              const fileName = selected.split(/[\\/]/).pop() || 'unknown.onnx';
                               setOnnxFiles([...onnxFiles, { name: fileName, path: 'fileonnx/' + fileName, size: 'Loading...' }]);
                             }
                           } catch (err) {
@@ -516,32 +519,42 @@ const SettingsWindow: React.FC = () => {
 
               {currentSettingsTab === 'Appearance & Output' && (
                 <div className="space-y-6 animate-in slide-in-from-right-2 duration-300">
+                  
+                  {/* Language */}
                   <section className="space-y-3">
-                    <h3 className="settings-section-title text-[11px]">Window Shell</h3>
+                    <h3 className="settings-section-title text-[11px]">{t('language')}</h3>
+                    <p className="text-[10px]" style={{ color: 'var(--text3)' }}>{t('language_desc')}</p>
                     <div className="flex gap-1 bg-[var(--bg-surface2)] p-1 rounded-xl border border-[var(--border)]">
-                      <SegBtn
-                        active={shell === 'macos'}
-                        onClick={() => setShell('macos')}
-                        label="macOS"
-                        preview={<span className="flex gap-0.5"><span className="w-2 h-2 rounded-full bg-[#FF5F57]"/><span className="w-2 h-2 rounded-full bg-[#FEBC2E]"/><span className="w-2 h-2 rounded-full bg-[#28C840]"/></span>}
+                      <SegBtn active={appLanguage === 'en'} onClick={() => setAppLanguage('en')} label="English" />
+                      <SegBtn active={appLanguage === 'th'} onClick={() => setAppLanguage('th')} label="ภาษาไทย" />
+                    </div>
+                  </section>
+
+                  {/* UI Scale */}
+                  <section className="space-y-3">
+                    <h3 className="settings-section-title text-[11px]">{t('ui_scale')}</h3>
+                    <p className="text-[10px]" style={{ color: 'var(--text3)' }}>{t('ui_scale_desc')}</p>
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="range" min="0.75" max="1.5" step="0.05" 
+                        value={uiScale} 
+                        onChange={(e) => setUiScale(parseFloat(e.target.value))}
+                        className="w-full accent-[var(--accent)]"
                       />
-                      <SegBtn
-                        active={shell === 'windows'}
-                        onClick={() => setShell('windows')}
-                        label="Windows"
-                        preview={<span className="font-mono text-[9px] tracking-widest opacity-70">─ □ ×</span>}
-                      />
+                      <span className="text-[11px] font-mono w-12 text-right">
+                        {Math.round(uiScale * 100)}%
+                      </span>
                     </div>
                   </section>
 
                   <section className="space-y-3">
-                    <h3 className="settings-section-title text-[11px]">Color Theme</h3>
+                    <h3 className="settings-section-title text-[11px]">{t('theme')}</h3>
                     <div className="flex gap-1 bg-[var(--bg-surface2)] p-1 rounded-xl border border-[var(--border)]">
-                      <SegBtn active={theme === 'dark'} onClick={() => setTheme('dark')} label="Zinc Dark"
+                      <SegBtn active={theme === 'dark'} onClick={() => setTheme('dark')} label={t('theme_dark')}
                         preview={<span className="w-3 h-3 rounded-full border border-white/20" style={{ background: '#18181b' }} />} />
-                      <SegBtn active={theme === 'light'} onClick={() => setTheme('light')} label="Stone Light"
+                      <SegBtn active={theme === 'light'} onClick={() => setTheme('light')} label={t('theme_light')}
                         preview={<span className="w-3 h-3 rounded-full border border-black/10" style={{ background: '#fafaf9' }} />} />
-                      <SegBtn active={theme === 'warm'} onClick={() => setTheme('warm')} label="Slate Mid"
+                      <SegBtn active={theme === 'warm'} onClick={() => setTheme('warm')} label={t('theme_warm')}
                         preview={<span className="w-3 h-3 rounded-full border border-white/20" style={{ background: '#1e293b' }} />} />
                     </div>
                     {/* Theme preview swatches */}
@@ -617,6 +630,35 @@ const SettingsWindow: React.FC = () => {
                           </tr>
                         </tbody>
                       </table>
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="settings-section-title text-[11px]">Camera Input Device Source</h3>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-[var(--text4)] uppercase tracking-widest px-1">
+                        Active Camera Device
+                      </label>
+                      <select
+                        className="mac-select w-full h-9"
+                        value={cameraIndex}
+                        onChange={(e) => {
+                          const newIndex = parseInt(e.target.value, 10);
+                          setCameraIndex(newIndex);
+                          setHasChanges(true);
+                          window.dispatchEvent(new CustomEvent('send-backend-command', { 
+                            detail: { action: 'set_camera', index: newIndex } 
+                          }));
+                        }}
+                      >
+                        <option value={0}>Camera 0 (Default / Built-in Webcam)</option>
+                        <option value={1}>Camera 1 (USB Microscope / External 1)</option>
+                        <option value={2}>Camera 2 (USB Microscope / External 2)</option>
+                        <option value={3}>Camera 3 (External Source 3)</option>
+                      </select>
+                      <p className="text-[9px] text-[var(--text4)] leading-snug px-1">
+                        Switch between built-in laptop webcam and external USB microscope camera.
+                      </p>
                     </div>
                   </section>
 

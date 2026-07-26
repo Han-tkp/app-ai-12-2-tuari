@@ -7,6 +7,7 @@ import VideoControls from './VideoControls';
 import { WS_STREAM } from '../../config';
 import { Box } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { useTranslation } from '../../i18n';
 
 const Workspace: React.FC = () => {
   const {
@@ -18,6 +19,8 @@ const Workspace: React.FC = () => {
     activeSlideId, setActiveSlideId, slides,
     setImportedMediaPath, importedMediaPath,
   } = useAppStore();
+
+  const { t } = useTranslation();
 
   const [zoom, setZoom] = useState(100);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -361,25 +364,16 @@ const Workspace: React.FC = () => {
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  // Handle media import from Tauri drag-drop
+  // Handle media import from Electron drag-drop
   const handleImportMedia = useCallback(async (path: string, type: 'image' | 'video') => {
-    console.log('[Import] Tauri drop path:', path, type);
+    console.log('[Import] Electron drop path:', path, type);
     setIsImportingMedia(true);
     setImportProgress(`Importing ${type}...`);
 
     try {
       // For images, read and display locally immediately
       if (type === 'image') {
-        const { readFile } = await import('@tauri-apps/plugin-fs');
-        const fileData = await readFile(path);
-        const bytes = new Uint8Array(fileData);
-        const CHUNK_SIZE = 8192;
-        const chunks: string[] = [];
-        for (let i = 0; i < bytes.byteLength; i += CHUNK_SIZE) {
-          const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.byteLength));
-          chunks.push(String.fromCharCode(...chunk));
-        }
-        const base64 = btoa(chunks.join(''));
+        const base64 = await window.electron.readFileAsBase64(path);
         const ext = path.split('.').pop()?.toLowerCase();
         const mimeType = ext === 'png' ? 'image/png' :
                          ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
@@ -546,9 +540,9 @@ const Workspace: React.FC = () => {
               onMouseDown={handleSnapshotMouseDown}
             >
               <div className="w-2 h-2 rounded-full bg-[var(--mac-red)] animate-pulse" />
-              <span className="text-[11px] font-bold text-white">SNAPSHOT</span>
+              <span className="text-[11px] font-bold text-white uppercase">{t('snapshot')}</span>
               <span className="text-[13px] font-instrument font-bold" style={{ color: 'var(--accent-text)' }}>
-                {snapshotFreeze.count} detected
+                {snapshotFreeze.count} {t('detected')}
               </span>
             </div>
           )}
@@ -560,8 +554,8 @@ const Workspace: React.FC = () => {
                 <path d="M14 36h12M20 30v6" />
                 <line x1="8" y1="8" x2="32" y2="28" strokeWidth="1.5" />
               </svg>
-              <span className="text-[11px] font-bold uppercase tracking-[0.15em] mt-4" style={{ color: 'var(--text4)' }}>No Signal</span>
-              <span className="text-[9px] mt-1" style={{ color: 'var(--text4)' }}>Start camera or drag & drop an image</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em] mt-4" style={{ color: 'var(--text4)' }}>{t('no_signal')}</span>
+              <span className="text-[9px] mt-1" style={{ color: 'var(--text4)' }}>{t('no_signal_desc')}</span>
             </div>
           )}
         </div>

@@ -732,6 +732,11 @@ async def load_project(path: str):
         logger.error("Failed to load project %s: %s", path, e)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/ping")
+@app.get("/ping")
+async def ping():
+    return {"status": "ok", "message": "pong"}
+
 @app.get("/api/session-data")
 async def get_session_data():
     # Convert numpy types to native python floats for JSON serialization
@@ -1449,4 +1454,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

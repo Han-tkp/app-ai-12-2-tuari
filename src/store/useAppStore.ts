@@ -6,7 +6,6 @@ import { getSafeWorkspaceDir, getAutoSaveDir } from '../utils/fsUtils';
 // ── Persistence Keys ─────────────────────────────────────────────────────────
 const LS_KEYS = {
   THEME: 'dd-theme',
-  SHELL: 'dd-shell',
   PROJECT: 'dd-current-project',
   AUTO_SAVE: 'dd-autosave-data',
   AI_CONFIDENCE: 'dd-ai-confidence',
@@ -16,13 +15,14 @@ const LS_KEYS = {
   FILTER_MAX: 'dd-filter-max',
   ZOOM_WITH_CTRL: 'dd-zoom-with-ctrl',
   EXCEL_LANGUAGE: 'dd-excel-language',
+  APP_LANGUAGE: 'dd-app-language',
+  UI_SCALE: 'dd-ui-scale',
   EXPORT_PATH: 'dd-export-path',
   ANNOTATION_FADE_DELAY: 'dd-annotation-fade-delay',
 };
 
 // ── Restore persisted preferences ────────────────────────────────────────────
 const _storedTheme = (localStorage.getItem(LS_KEYS.THEME) as 'dark' | 'light' | 'warm') || 'light';
-const _storedShell = (localStorage.getItem(LS_KEYS.SHELL) as 'macos' | 'windows') || 'windows';
 const _storedAnnotationFadeDelay = parseInt(localStorage.getItem(LS_KEYS.ANNOTATION_FADE_DELAY) || '1500', 10);
 const _storedExportPath = localStorage.getItem(LS_KEYS.EXPORT_PATH) || '';
 const _storedAIConfidence = parseFloat(localStorage.getItem(LS_KEYS.AI_CONFIDENCE) || '0.25');
@@ -32,8 +32,10 @@ const _storedFilterMin = parseFloat(localStorage.getItem(LS_KEYS.FILTER_MIN) || 
 const _storedFilterMax = parseFloat(localStorage.getItem(LS_KEYS.FILTER_MAX) || '30');
 const _storedZoomWithCtrl = localStorage.getItem(LS_KEYS.ZOOM_WITH_CTRL) !== 'false';
 const _storedExcelLanguage = (localStorage.getItem(LS_KEYS.EXCEL_LANGUAGE) as 'th' | 'en') || 'th';
+const _storedAppLanguage = (localStorage.getItem(LS_KEYS.APP_LANGUAGE) as 'th' | 'en') || 'en';
+const _storedUiScale = parseFloat(localStorage.getItem(LS_KEYS.UI_SCALE) || '1.0');
 const _storedVideoControlsMode = (localStorage.getItem('dd-video-controls-mode') as 'full' | 'mini') || 'full';
-document.documentElement.classList.add(_storedTheme, `shell-${_storedShell}`);
+document.documentElement.classList.add(_storedTheme);
 
 // ── Auto-Save Constants ──────────────────────────────────────────────────────
 export const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
@@ -72,7 +74,8 @@ interface AppState {
   projectName: string;
   mode: 'Analyze' | 'Report';
   theme: 'light' | 'dark' | 'warm';
-  shell: 'macos' | 'windows';
+  appLanguage: 'en' | 'th';
+  uiScale: number;
   isSettingsOpen: boolean;
   settingsPosition: { x: number; y: number };
   currentSettingsTab: 'AI & Capture' | 'Hardware & Camera' | 'AI Models' | 'Manual Edit' | 'Appearance & Output';
@@ -149,9 +152,10 @@ interface AppState {
 
   // Actions
   setProjectName: (name: string) => void;
-  setMode: (mode: 'Analyze' | 'Report') => void;
+  setMode: (mode: AppState['mode']) => void;
   setTheme: (theme: 'light' | 'dark' | 'warm') => void;
-  setShell: (shell: 'macos' | 'windows') => void;
+  setAppLanguage: (lang: 'en' | 'th') => void;
+  setUiScale: (scale: number) => void;
   setSettingsOpen: (open: boolean) => void;
   setSettingsPosition: (pos: { x: number; y: number }) => void;
   setSettingsTab: (tab: AppState['currentSettingsTab']) => void;
@@ -168,6 +172,7 @@ interface AppState {
   // Camera/AI Actions
   toggleCamera: () => void;
   switchCamera: () => void;
+  setCameraIndex: (index: number) => void;
   setAIRunning: (running: boolean) => void;
   setObjectiveLens: (lens: '4x' | '10x') => void;
   setAIConfidence: (conf: number) => void;
@@ -242,7 +247,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   projectName: 'Untitled Project',
   mode: 'Analyze',
   theme: _storedTheme,
-  shell: _storedShell,
+  appLanguage: _storedAppLanguage,
+  uiScale: _storedUiScale,
   isSettingsOpen: false,
   settingsPosition: INITIAL_SETTINGS_POS,
   currentSettingsTab: 'AI & Capture',
@@ -317,11 +323,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     document.documentElement.classList.add(theme);
     localStorage.setItem(LS_KEYS.THEME, theme);
   },
-  setShell: (shell) => {
-    set({ shell });
-    document.documentElement.classList.remove('shell-macos', 'shell-windows');
-    document.documentElement.classList.add(`shell-${shell}`);
-    localStorage.setItem(LS_KEYS.SHELL, shell);
+  setAppLanguage: (appLanguage) => {
+    set({ appLanguage });
+    localStorage.setItem(LS_KEYS.APP_LANGUAGE, appLanguage);
+  },
+  setUiScale: (uiScale) => {
+    set({ uiScale });
+    localStorage.setItem(LS_KEYS.UI_SCALE, uiScale.toString());
+    // Directly apply scale to document body for immediate effect
+    if (window.electron && (window.electron as any).setZoomFactor) {
+      (window.electron as any).setZoomFactor(uiScale);
+    } else {
+      // Fallback CSS scale
+      document.documentElement.style.fontSize = `${uiScale * 100}%`;
+    }
   },
   setSettingsOpen: (isSettingsOpen) => set({ isSettingsOpen }),
   setSettingsPosition: (settingsPosition) => set({ settingsPosition }),
@@ -455,6 +470,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     isVideoPlaying: !state.isCameraRunning ? false : state.isVideoPlaying,
   })),
   switchCamera: () => set((state) => ({ cameraIndex: (state.cameraIndex + 1) % 6 })),
+  setCameraIndex: (cameraIndex: number) => set({ cameraIndex }),
   setAIRunning: (isAIRunning) => set({ isAIRunning, isDirty: true }),
   setObjectiveLens: (lens) => {
     set({ objectiveLens: lens, isDirty: true });

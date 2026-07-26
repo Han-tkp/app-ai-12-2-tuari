@@ -27,6 +27,7 @@ function computeSlideStats(droplets: number[]) {
 }
 
 import { useAppStore } from '../../store/useAppStore';
+import { useTranslation } from '../../i18n';
 
 const Sidebar: React.FC = () => {
   const {
@@ -45,6 +46,7 @@ const Sidebar: React.FC = () => {
     clearAnnotations,
     importedMediaPath,
   } = useAppStore();
+  const { t } = useTranslation();
 
   // AI/Snapshot available when camera is running OR an image has been imported
   const canUseAI = isCameraRunning || !!importedMediaPath;
@@ -96,8 +98,8 @@ const Sidebar: React.FC = () => {
 
       {/* ── Mode Tabs ──────────────────────────────────────────────── */}
       <div className="flex shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
-        <SidebarTab active={mode === 'Analyze'} onClick={() => setMode('Analyze')} icon={<Camera size={13} />} label="Analyze" />
-        <SidebarTab active={mode === 'Report'}  onClick={() => setMode('Report')}  icon={<LayoutDashboard size={13} />} label="Report" />
+        <SidebarTab active={mode === 'Analyze'} onClick={() => setMode('Analyze')} icon={<Camera size={13} />} label={t('analyze')} />
+        <SidebarTab active={mode === 'Report'}  onClick={() => setMode('Report')}  icon={<LayoutDashboard size={13} />} label={t('report')} />
       </div>
 
       {/* ── Scrollable content ─────────────────────────────────────── */}

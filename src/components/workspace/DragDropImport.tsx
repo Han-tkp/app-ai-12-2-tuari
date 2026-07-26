@@ -16,87 +16,85 @@ function getFileType(path: string): 'image' | 'video' | null {
 }
 
 /**
- * DragDropImport — listens for OS file-drop events via Tauri's onDragDropEvent.
- * Uses refs to avoid duplicate listeners from React StrictMode.
+ * DragDropImport — listens for OS file-drop events via Electron window.electron.onFileDrop
+ * and HTML5 drag-and-drop.
  */
 const DragDropImport: React.FC<DragDropImportProps> = ({ onImport }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragFileType, setDragFileType] = useState<'image' | 'video' | null>(null);
   const onImportRef = useRef(onImport);
   onImportRef.current = onImport;
-  const unlistenRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const setup = async () => {
-      // Clean up any previous listener before setting up a new one
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
-      }
-
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const win = getCurrentWindow();
-
-        if (cancelled) return;
-
-        const unlisten = await win.onDragDropEvent((event) => {
-          if (cancelled) return;
-
-          const payload = event.payload as {
-            type: string;
-            paths?: string[];
-          };
-
-          if (payload.type === 'enter' || payload.type === 'over') {
-            const paths = payload.paths ?? [];
-            if (paths.length > 0) {
-              const t = getFileType(paths[0]);
-              setDragFileType(t);
-              setIsDragging(t !== null);
-            } else {
-              setIsDragging(true);
-            }
-          } else if (payload.type === 'leave' || payload.type === 'cancel') {
-            setIsDragging(false);
-            setDragFileType(null);
-          } else if (payload.type === 'drop') {
-            setIsDragging(false);
-            const paths = payload.paths ?? [];
-            if (paths.length > 0) {
-              const path = paths[0];
-              const t = getFileType(path);
-              if (t) {
-                console.log('[DragDrop] drop:', path, t);
-                onImportRef.current?.(path, t);
-              }
-            }
-            setDragFileType(null);
-          }
-        });
-
-        if (cancelled) {
-          unlisten();
-        } else {
-          unlistenRef.current = unlisten;
-        }
-      } catch (err) {
-        console.warn('[DragDrop] Tauri onDragDropEvent unavailable:', err);
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+        setIsDragging(true);
       }
     };
 
-    setup();
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.clientX === 0 && e.clientY === 0) {
+        setIsDragging(false);
+        setDragFileType(null);
+      }
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      setDragFileType(null);
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        let filePath = (file as any).path;
+        
+        if (!filePath && window.electron?.getFilePath) {
+          filePath = window.electron.getFilePath(file);
+        }
+        
+        if (!filePath) filePath = file.name;
+
+        const t = getFileType(filePath);
+        if (t && filePath) {
+          console.log('[DragDrop] HTML5 drop:', filePath, t);
+          onImportRef.current?.(filePath, t);
+        }
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    let unlistenFileDrop: (() => void) | null = null;
+    if (window.electron?.onFileDrop) {
+      unlistenFileDrop = window.electron.onFileDrop((paths) => {
+        setIsDragging(false);
+        setDragFileType(null);
+        if (paths && paths.length > 0) {
+          const path = paths[0];
+          const t = getFileType(path);
+          if (t) {
+            console.log('[DragDrop] Electron drop:', path, t);
+            onImportRef.current?.(path, t);
+          }
+        }
+      });
+    }
 
     return () => {
-      cancelled = true;
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+      if (unlistenFileDrop) {
+        unlistenFileDrop();
       }
     };
-  }, []); // Empty deps — ref handles callback updates
+  }, []);
 
   const icon =
     dragFileType === 'image' ? <Image size={32} /> :

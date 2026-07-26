@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, ImagePlus, FolderOpen, Clock, Droplet, Settings, ChevronRight, Trash2, FileText, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { open } from '@tauri-apps/plugin-dialog';
 import { API_BASE } from '../config';
+import { useTranslation } from '../i18n';
 
 // ── Recent Projects stored in localStorage ──────────────────────────────────
 const LS_RECENT = 'dd-recent-projects';
@@ -43,7 +43,8 @@ interface NewProjectDialogProps {
 }
 
 const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ type, onConfirm, onCancel }) => {
-  const [name, setName] = useState('Untitled Project');
+  const { t } = useTranslation();
+  const [name, setName] = useState(t('project_name'));
   const [lens, setLens] = useState<'4x' | '10x'>('10x');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -78,10 +79,10 @@ const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ type, onConfirm, on
             )}
             <div>
               <h3 className="text-[15px] font-semibold" style={{ color: 'var(--text1)' }}>
-                {type === 'camera' ? 'New Live Camera Project' : 'New Import Media Project'}
+                {type === 'camera' ? t('new_live_project') : t('new_import_project')}
               </h3>
               <p className="text-[12px]" style={{ color: 'var(--text3)' }}>
-                {type === 'camera' ? 'Analyze droplets in real-time from microscope' : 'Import images or video for analysis'}
+                {type === 'camera' ? t('new_live_desc') : t('new_import_desc')}
               </p>
             </div>
           </div>
@@ -89,7 +90,7 @@ const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ type, onConfirm, on
 
         <div className="px-6 py-5 space-y-4">
           <div>
-            <label className="text-[12px] font-medium block mb-1.5" style={{ color: 'var(--text2)' }}>Project Name</label>
+            <label className="text-[12px] font-medium block mb-1.5" style={{ color: 'var(--text2)' }}>{t('project_name')}</label>
             <input
               ref={inputRef}
               type="text"
@@ -104,7 +105,7 @@ const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ type, onConfirm, on
           </div>
 
           <div>
-            <label className="text-[12px] font-medium block mb-1.5" style={{ color: 'var(--text2)' }}>Objective Lens</label>
+            <label className="text-[12px] font-medium block mb-1.5" style={{ color: 'var(--text2)' }}>{t('objective_lens')}</label>
             <div className="flex gap-2">
               {(['4x', '10x'] as const).map(l => (
                 <button
@@ -124,20 +125,12 @@ const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ type, onConfirm, on
           </div>
         </div>
 
-        <div className="px-6 py-4 flex justify-end gap-2" style={{ background: 'var(--bg-surface2)' }}>
-          <button
-            onClick={onCancel}
-            className="px-5 py-2 rounded-lg text-[12px] font-medium transition-colors"
-            style={{ background: 'var(--bg-surface3)', color: 'var(--text2)' }}
-          >
-            Cancel
+        <div className="px-6 py-4 border-t flex justify-end gap-2" style={{ borderColor: 'var(--border)', background: 'var(--bg-window)' }}>
+          <button onClick={onCancel} className="px-5 py-2 rounded-lg text-[12px] font-medium transition-colors" style={{ background: 'var(--bg-input)', color: 'var(--text2)' }}>
+            {t('cancel')}
           </button>
-          <button
-            onClick={() => name.trim() && onConfirm(name.trim(), lens)}
-            className="px-5 py-2 rounded-lg text-[12px] font-medium transition-colors"
-            style={{ background: 'var(--accent)', color: '#fff' }}
-          >
-            Create Project
+          <button onClick={() => name.trim() && onConfirm(name.trim(), lens)} className="px-5 py-2 rounded-lg text-[12px] font-medium transition-colors" style={{ background: 'var(--accent)', color: '#fff' }}>
+            {t('create_project')}
           </button>
         </div>
       </div>
@@ -155,6 +148,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
   const { newProject, loadProjectData, setObjectiveLens, setImportedMediaPath } = useAppStore();
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [dialogType, setDialogType] = useState<'camera' | 'media' | null>(null);
+  const { t } = useTranslation();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -168,14 +162,14 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
 
     if (type === 'media') {
       try {
-        const selected = await open({
-          multiple: false,
+        const result = await window.electron.showOpenDialog({
+          properties: ['openFile'],
           filters: [
             { name: 'Images & Videos', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'mp4', 'avi', 'mov'] }
           ]
         });
-        if (selected && typeof selected === 'string') {
-          setImportedMediaPath(selected);
+        if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+          setImportedMediaPath(result.filePaths[0]);
         }
       } catch (err) {
         console.error('Media import error:', err);
@@ -187,12 +181,13 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
 
   const handleOpenProject = async () => {
     try {
-      const selected = await open({
-        multiple: false,
+      const result = await window.electron.showOpenDialog({
+        properties: ['openFile'],
         filters: [{ name: 'DropDetect Project', extensions: ['drop'] }]
       });
 
-      if (selected && typeof selected === 'string') {
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const selected = result.filePaths[0];
         const response = await fetch(`${API_BASE}/api/load-project?path=${encodeURIComponent(selected)}`);
         if (response.ok) {
           const data = await response.json();
@@ -293,7 +288,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
             style={{ color: 'var(--text2)' }}
           >
             <Settings size={16} />
-            Settings
+            {t('settings')}
           </button>
         </nav>
 

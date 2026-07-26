@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useTranslation } from '../../i18n';
 
 const PROFILE_COLOR: Record<string, string> = {
   low:  'var(--mac-orange)',
@@ -19,6 +20,8 @@ const TopDashboard: React.FC = () => {
     hardwareProfile, currentSessionDroplets,
     activeSlideId, slides,
   } = useAppStore();
+  
+  const { t } = useTranslation();
 
   const activeSlide  = slides.find(s => s.id === activeSlideId);
   const oobHigh      = (outOfBounds || 0) > 10;
@@ -47,7 +50,7 @@ const TopDashboard: React.FC = () => {
         </div>
         <div className="w-px h-6" style={{ background: 'var(--separator)' }} />
         <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text4)', letterSpacing: '0.07em' }}>Status</span>
+          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text4)', letterSpacing: '0.07em' }}>{t('status')}</span>
           <div className="flex items-center gap-1">
             {activeSlide && (
               <div className="w-1.5 h-1.5 rounded-full animate-pulse-dot" style={{ background: statusColor }} />
@@ -59,7 +62,7 @@ const TopDashboard: React.FC = () => {
         </div>
         <div className="w-px h-6" style={{ background: 'var(--separator)' }} />
         <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text4)', letterSpacing: '0.07em' }}>Drops</span>
+          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text4)', letterSpacing: '0.07em' }}>{t('drops')}</span>
           <span className="font-instrument text-[12px] font-bold leading-none" style={{ color: 'var(--accent-text)' }}>
             {activeSlide ? activeSlide.droplets.length : '—'}
           </span>
@@ -68,18 +71,18 @@ const TopDashboard: React.FC = () => {
 
       {/* ── Main metrics ── */}
       <div className="flex flex-1 items-center justify-evenly px-2">
-        <MetricCell label="Target" value={targetSize?.toString() || '0'} unit="µm" />
+        <MetricCell label={t('target')} value={targetSize?.toString() || '0'} unit="µm" />
         <Divider />
         <MetricCell label="VMD (Dv0.5)" value={(vmd || 0).toFixed(2)} unit="µm" highlight />
         <Divider />
-        <MetricCell label="In-Frame" value={currentSessionDroplets?.length?.toString() || '0'} />
+        <MetricCell label={t('in_frame')} value={currentSessionDroplets?.length?.toString() || '0'} />
         <Divider />
-        <MetricCell label="Accumulated" value={accumulated?.toString() || '0'} />
+        <MetricCell label={t('accumulated')} value={accumulated?.toString() || '0'} />
         <Divider />
-        <MetricCell label="Span" value={(span || 0).toFixed(3)} />
+        <MetricCell label={t('span')} value={(span || 0).toFixed(3)} />
         <Divider />
         <MetricCell
-          label="Out-of-Bounds"
+          label={t('out_of_bounds')}
           value={(outOfBounds || 0).toFixed(1)}
           unit="%"
           warn={oobHigh}
@@ -90,7 +93,7 @@ const TopDashboard: React.FC = () => {
             className="text-[8.5px] font-semibold uppercase leading-none mb-1.5"
             style={{ color: 'var(--text4)', letterSpacing: '0.07em' }}
           >
-            WHO Compliance
+            {t('who_compliance')}
           </span>
           <div className="flex items-center gap-1">
             <span
@@ -100,10 +103,10 @@ const TopDashboard: React.FC = () => {
               {whoIcon}
             </span>
             <span
-              className="text-[11px] font-semibold"
+              className="text-[10px] font-medium"
               style={{ color: whoColor }}
             >
-              {!hasData ? 'N/A' : whoPass ? 'Pass' : 'Fail'}
+              {!hasData ? t('not_avail') : whoPass ? t('pass') : t('fail')}
             </span>
           </div>
         </div>

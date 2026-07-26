@@ -1,0 +1,52 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.h4n.dropdetect",
+  "productName": "DropDetect AI",
+  "directories": {
+    "output": "dist-release"
+  },
+  "files": [
+    "out/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "fileonnx",
+      "to": "fileonnx",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "resources",
+      "to": "resources",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "backend/dist",
+      "to": "backend/dist",
+      "filter": [
+        "**/*"
+      ]
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "iconapp/DropDetect.ico"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "DropDetect AI"
+  }
+}

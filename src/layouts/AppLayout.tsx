@@ -4,30 +4,31 @@ import TopDashboard from '../components/dashboard/TopDashboard';
 import Workspace from '../components/workspace/Workspace';
 import SettingsWindow from '../components/SettingsWindow';
 import StartScreen, { addRecentProject } from '../components/StartScreen';
+import LoadingScreen from '../components/LoadingScreen';
 import { useAppStore } from '../store/useAppStore';
 import { ChevronDown, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X, Cloud, CloudOff, AlertCircle, Home } from 'lucide-react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open } from '@tauri-apps/plugin-dialog';
 import { AUTO_SAVE_INTERVAL } from '../store/useAppStore';
 import { API_BASE } from '../config';
 import { initializeSafeWorkspace } from '../utils/fsUtils';
 
-const appWindow = getCurrentWindow();
-
 const AppLayout: React.FC = () => {
   const {
-    setSettingsOpen, projectName, setProjectName, triggerSave,
-    hotkeyLiveAI, hotkeySnapshot, isCameraRunning, isAIRunning, setAIRunning,
-    loadProjectData, shell, importedMediaPath, newProject,
+    theme, projectName, setProjectName, loadProjectData, importedMediaPath, newProject,
+    setSettingsOpen, triggerSave, hotkeyLiveAI, hotkeySnapshot,
+    isCameraRunning, isAIRunning, setAIRunning,
     isDirty, autoSaveEnabled, lastAutoSave, autoSaveError,
     triggerAutoSave, setAutoSaveEnabled, clearAutoSaveError,
-    loadFromAutoSave,
+    loadFromAutoSave, uiScale,
   } = useAppStore();
 
   const [isFileMenuOpen, setFileMenuOpen] = useState(false);
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showStartScreen, setShowStartScreen] = useState(true);
+
+  // Loading Screen states
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   // Modal states for file operations
   const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
@@ -75,6 +76,45 @@ const AppLayout: React.FC = () => {
     };
     initWorkspace();
   }, []);
+
+  // ── Apply UI Scale on Mount & Change ───────────────────────────────────────
+  useEffect(() => {
+    if (window.electron && window.electron.setZoomFactor) {
+      window.electron.setZoomFactor(uiScale);
+    } else {
+      document.documentElement.style.fontSize = `${uiScale * 100}%`;
+    }
+  }, [uiScale]);
+
+  // ── Wait for Backend AI to be Ready ───────────────────────────────────────
+  useEffect(() => {
+    if (isBackendReady) return;
+
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+      progress += Math.floor(Math.random() * 5) + 2; // fake progress
+      if (progress > 95) progress = 95;
+      setLoadingProgress(progress);
+    }, 200);
+
+    const checkBackend = async () => {
+      try {
+        const status = await window.electron.getBackendStatus();
+        if (status.running) {
+          setLoadingProgress(100);
+          setTimeout(() => setIsBackendReady(true), 600);
+        } else {
+          setTimeout(checkBackend, 500);
+        }
+      } catch (e) {
+        setTimeout(checkBackend, 500);
+      }
+    };
+
+    checkBackend();
+
+    return () => clearInterval(progressInterval);
+  }, [isBackendReady]);
 
   // ── Cleanup auto-save on clean exit ────────────────────────────────────────
   useEffect(() => {
@@ -147,12 +187,13 @@ const AppLayout: React.FC = () => {
   const handleOpenProject = async () => {
     setFileMenuOpen(false);
     try {
-      const selected = await open({
-        multiple: false,
+      const result = await window.electron.showOpenDialog({
+        properties: ['openFile'],
         filters: [{ name: 'DropDetect Project', extensions: ['drop'] }]
       });
 
-      if (selected && typeof selected === 'string') {
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const selected = result.filePaths[0];
         const response = await fetch(`${API_BASE}/api/load-project?path=${encodeURIComponent(selected)}`);
         if (response.ok) {
           const data = await response.json();
@@ -200,7 +241,7 @@ const AppLayout: React.FC = () => {
     if (isDirty) {
       setShowExitDialog(true);
     } else {
-      appWindow.close();
+      window.electron.closeWindow();
     }
   };
 
@@ -209,7 +250,7 @@ const AppLayout: React.FC = () => {
       await triggerSave();
     }
     setShowExitDialog(false);
-    appWindow.close();
+    window.electron.closeWindow();
   };
 
   const formatAutoSaveTime = (timestamp: number) => {
@@ -234,6 +275,8 @@ const AppLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden flex-col font-sans select-none relative bg-[var(--bg-window)] text-[var(--text1)]">
+      {!isBackendReady && <LoadingScreen progress={loadingProgress} />}
+      
       <SettingsWindow />
 
       {/* ── Recovery Dialog ─────────────────────────────────────────────────── */}
@@ -440,40 +483,13 @@ const AppLayout: React.FC = () => {
         </div>
       </div>
 
-      {/* Title Bar — layout adapts to shell preference */}
+      {/* Menu Bar */}
       <div
-        data-tauri-drag-region
         className="h-11 flex items-center border-b shrink-0 z-[100] transition-colors cursor-default"
-        style={{ backgroundColor: 'var(--bg-titlebar)', backdropFilter: 'var(--blur)', WebkitBackdropFilter: 'var(--blur)', borderColor: 'var(--border)' }}
+        style={{ backgroundColor: 'var(--bg-titlebar)', backdropFilter: 'var(--blur)', WebkitBackdropFilter: 'var(--blur)', borderColor: 'var(--border)' } as React.CSSProperties}
       >
         {/* Left cluster */}
         <div className="flex items-center gap-2 px-4">
-          {/* macOS traffic lights — left side */}
-          {shell === 'macos' && (
-            <div className="flex items-center gap-1.5 mr-1">
-              <button
-                onClick={handleExit}
-                className="w-3.5 h-3.5 rounded-full bg-[#FF5F57] border border-black/10 flex items-center justify-center group hover:brightness-110 transition-all shadow-sm"
-                title="Close"
-              >
-                <X size={8} strokeWidth={4} className="text-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-              <button
-                onClick={() => appWindow.minimize()}
-                className="w-3.5 h-3.5 rounded-full bg-[#FEBC2E] border border-black/10 flex items-center justify-center group hover:brightness-110 transition-all shadow-sm"
-                title="Minimize"
-              >
-                <Minus size={8} strokeWidth={4} className="text-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-              <button
-                onClick={() => appWindow.toggleMaximize()}
-                className="w-3.5 h-3.5 rounded-full bg-[#28C840] border border-black/10 flex items-center justify-center group hover:brightness-110 transition-all shadow-sm"
-                title="Maximize"
-              >
-                <Square size={7} strokeWidth={4} className="text-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            </div>
-          )}
 
           {/* File menu + Settings */}
           <div className="flex gap-0.5 relative">
@@ -530,33 +546,8 @@ const AppLayout: React.FC = () => {
           <span className="text-[12px]" style={{ color: 'var(--text3)' }}>{projectName}</span>
         </div>
 
-        {/* Right cluster — Windows chrome buttons */}
+        {/* Right cluster */}
         <div className="ml-auto flex h-full">
-          {shell === 'windows' && (
-            <>
-              <button
-                onClick={() => appWindow.minimize()}
-                className="w-11 h-full flex items-center justify-center hover:bg-[var(--bg-hover)] text-[var(--text3)] transition-all"
-                title="Minimize"
-              >
-                <Minus size={11} strokeWidth={1.5} />
-              </button>
-              <button
-                onClick={() => appWindow.toggleMaximize()}
-                className="w-11 h-full flex items-center justify-center hover:bg-[var(--bg-hover)] text-[var(--text3)] transition-all"
-                title="Maximize"
-              >
-                <Square size={10} strokeWidth={1.5} />
-              </button>
-              <button
-                onClick={handleExit}
-                className="w-11 h-full flex items-center justify-center hover:bg-[var(--mac-red)] hover:text-white text-[var(--text3)] transition-all"
-                title="Close"
-              >
-                <X size={14} strokeWidth={1.5} />
-              </button>
-            </>
-          )}
         </div>
       </div>
 

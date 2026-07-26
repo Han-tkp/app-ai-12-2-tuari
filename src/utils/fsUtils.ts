@@ -1,6 +1,3 @@
-import { documentDir, join } from '@tauri-apps/api/path';
-import { exists, mkdir } from '@tauri-apps/plugin-fs';
-
 /**
  * Initialize Safe Workspace Architecture
  * Creates the following folder structure in Documents:
@@ -23,37 +20,8 @@ import { exists, mkdir } from '@tauri-apps/plugin-fs';
  */
 export async function initializeSafeWorkspace(): Promise<string> {
   try {
-    // 1. Get Documents directory
-    const baseDocs = await documentDir();
-    
-    // 2. Define sub-folders to create
-    const foldersToCreate = [
-      'DropDetect_Workspace',
-      'DropDetect_Workspace/Projects',
-      'DropDetect_Workspace/AutoSave',
-      'DropDetect_Workspace/Exports',
-      'DropDetect_Workspace/Exports/Excel',
-      'DropDetect_Workspace/Exports/QuickExports',
-      'DropDetect_Workspace/Media',
-      'DropDetect_Workspace/Media/Imported',
-      'DropDetect_Workspace/Media/Processed',
-      'DropDetect_Workspace/Logs'
-    ];
-
-    // 3. Create folders if they don't exist
-    for (const folder of foldersToCreate) {
-      const fullPath = await join(baseDocs, folder);
-      const dirExists = await exists(fullPath);
-      
-      if (!dirExists) {
-        await mkdir(fullPath, { recursive: true });
-        console.log(`Created safe directory: ${fullPath}`);
-      }
-    }
-    
-    // Return the main workspace path
-    return await join(baseDocs, 'DropDetect_Workspace');
-    
+    const result = await window.electron.initializeSafeWorkspace();
+    return result.workspacePath;
   } catch (error) {
     console.error("Failed to initialize safe workspace:", error);
     throw error;
@@ -61,51 +29,52 @@ export async function initializeSafeWorkspace(): Promise<string> {
 }
 
 export async function getSafeWorkspaceDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace');
+  const result = await window.electron.initializeSafeWorkspace();
+  return result.workspacePath;
 }
 
 export async function getProjectsDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Projects');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Projects`;
 }
 
 export async function getAutoSaveDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'AutoSave');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/AutoSave`;
 }
 
 export async function getExportsDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Exports');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Exports`;
 }
 
 export async function getExcelExportsDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Exports', 'Excel');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Exports/Excel`;
 }
 
 export async function getQuickExportsDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Exports', 'QuickExports');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Exports/QuickExports`;
 }
 
 export async function getMediaDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Media');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Media`;
 }
 
 export async function getMediaImportedDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Media', 'Imported');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Media/Imported`;
 }
 
 export async function getMediaProcessedDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Media', 'Processed');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Media/Processed`;
 }
 
 export async function getLogsDir(): Promise<string> {
-  const docsPath = await documentDir();
-  return await join(docsPath, 'DropDetect_Workspace', 'Logs');
+  const base = await getSafeWorkspaceDir();
+  return `${base}/Logs`;
 }
+
