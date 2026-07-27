@@ -206,7 +206,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
       }
     } catch (err) {
       console.error('Open project error:', err);
-      setErrorMsg('Cannot connect to backend. Please start the Python backend first (cd backend && python main.py).');
+      setErrorMsg('Cannot connect to backend. Please make sure the AI backend is running.');
     }
   };
 

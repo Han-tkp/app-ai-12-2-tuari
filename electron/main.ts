@@ -1,42 +1,34 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join, dirname } from 'path'
+import { join, dirname, resolve } from 'path'
 import * as fs from 'fs'
-import { spawn, spawnSync, execSync, ChildProcess } from 'child_process'
+import { spawn, spawnSync, ChildProcess } from 'child_process'
 import * as zlib from 'zlib'
 import { is } from '@electron-toolkit/utils'
 
 // Fix invisible window on some Windows GPU drivers
 app.disableHardwareAcceleration()
-app.commandLine.appendSwitch('disable-gpu')
 
 let mainWindow: BrowserWindow | null = null
 let pythonProcess: ChildProcess | null = null
+let isShuttingDown = false
 
 // ── Python AI Backend Manager ─────────────────────────────────────────────
 
+let restartAttempts = 0
+const MAX_RESTART_ATTEMPTS = 3
+
 function startPythonBackend(): void {
-  // Pre-flight port 8000 check/cleanup step to prevent process collisions on app restart
+  restartAttempts = 0
+  _doStartPythonBackend()
+}
+
+function _doStartPythonBackend(): void {
+  // Pre-flight: kill only known dropdetect-backend processes (no PID-based blind kill)
   try {
     if (process.platform === 'win32') {
       spawnSync('taskkill', ['/F', '/IM', 'dropdetect-backend.exe'], { stdio: 'ignore' })
-      try {
-        const netstatOut = execSync('netstat -ano', { encoding: 'utf8' })
-        const lines = netstatOut.split('\n')
-        for (const line of lines) {
-          if (line.includes(':8000') && line.includes('LISTENING')) {
-            const parts = line.trim().split(/\s+/)
-            const pid = parts[parts.length - 1]
-            if (pid && /^\d+$/.test(pid) && pid !== '0') {
-              console.log(`[python-backend] Pre-flight cleanup killing PID ${pid} bound to port 8000`)
-              spawnSync('taskkill', ['/F', '/PID', pid], { stdio: 'ignore' })
-            }
-          }
-        }
-      } catch {}
     }
-  } catch (err) {
-    console.warn('[python-backend] Pre-flight port 8000 cleanup warning:', err)
-  }
+  } catch { /* OK */ }
 
   const isDev = !app.isPackaged
   let command = ''
@@ -56,17 +48,14 @@ function startPythonBackend(): void {
     args = [mainScript]
   } else {
     const prodExe = join(process.resourcesPath, 'backend', 'dist', 'dropdetect-backend.exe')
-    const extraResourceExe = join(process.resourcesPath, 'dropdetect-backend.exe')
-    const devFallbackExe = join(appPath, 'backend', 'dist', 'dropdetect-backend.exe')
 
     if (fs.existsSync(prodExe)) {
       command = prodExe
-    } else if (fs.existsSync(extraResourceExe)) {
-      command = extraResourceExe
-    } else if (fs.existsSync(devFallbackExe)) {
-      command = devFallbackExe
     } else {
-      command = 'dropdetect-backend.exe'
+      console.error(`[python-backend] Backend executable not found at: ${prodExe}`)
+      mainWindow?.webContents.send('backend-error',
+        'AI backend executable not found. Please reinstall the app.')
+      return
     }
     args = []
   }
@@ -74,9 +63,7 @@ function startPythonBackend(): void {
   console.log(`[python-backend] Spawning AI Backend: ${command} ${args.join(' ')}`)
 
   try {
-    const backendCwd = fs.existsSync(join(appPath, 'backend'))
-      ? join(appPath, 'backend')
-      : appPath
+    const backendCwd = process.resourcesPath
 
     pythonProcess = spawn(command, args, {
       cwd: backendCwd,
@@ -84,8 +71,11 @@ function startPythonBackend(): void {
       windowsHide: true
     })
 
+    let stdoutBuffer = ''
     pythonProcess.stdout?.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n')
+      stdoutBuffer += data.toString()
+      const lines = stdoutBuffer.split('\n')
+      stdoutBuffer = lines.pop() || ''
       for (const line of lines) {
         if (line.trim()) {
           console.log(`[python-backend] ${line.trim()}`)
@@ -93,35 +83,73 @@ function startPythonBackend(): void {
       }
     })
 
+    let stderrBuffer = ''
     pythonProcess.stderr?.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n')
+      stderrBuffer += data.toString()
+      const lines = stderrBuffer.split('\n')
+      stderrBuffer = lines.pop() || ''
       for (const line of lines) {
         if (line.trim()) {
-          console.error(`[python-backend] ${line.trim()}`)
+          console.warn(`[python-backend:stderr] ${line.trim()}`)
         }
       }
     })
 
     pythonProcess.on('error', (err: Error) => {
       console.error(`[python-backend] Error launching process:`, err)
+      pythonProcess = null
     })
 
     pythonProcess.on('close', (code: number | null, signal: string | null) => {
       console.log(`[python-backend] Process exited with code ${code}, signal ${signal}`)
       pythonProcess = null
+      if (code !== 0 && !isShuttingDown && restartAttempts < MAX_RESTART_ATTEMPTS) {
+        restartAttempts++
+        const delay = Math.min(1000 * Math.pow(2, restartAttempts), 8000)
+        console.log(`[python-backend] Will restart in ${delay}ms (attempt ${restartAttempts}/${MAX_RESTART_ATTEMPTS})`)
+        setTimeout(_doStartPythonBackend, delay)
+        mainWindow?.webContents.send('backend-status', { running: false, restarting: true, attempt: restartAttempts })
+      } else if (code !== 0 && !isShuttingDown) {
+        console.error('[python-backend] Max restart attempts reached. Giving up.')
+        mainWindow?.webContents.send('backend-error',
+          'AI backend crashed and could not be restarted. Please restart the app.')
+        mainWindow?.webContents.send('backend-status', { running: false, restarting: false })
+      }
     })
+
+    // Health check: wait up to 10s for backend to respond to ping
+    _waitForBackend(10, 1000, () => {})
   } catch (err) {
     console.error(`[python-backend] Exception while starting backend:`, err)
   }
 }
 
+async function _waitForBackend(retries: number, delayMs: number, onReady: () => void): Promise<void> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/ping', {
+        signal: AbortSignal.timeout(1500)
+      })
+      if (response.ok) {
+        console.log('[python-backend] Health check passed')
+        onReady()
+        return
+      }
+    } catch { /* retry */ }
+    await new Promise(r => setTimeout(r, delayMs))
+  }
+  console.warn('[python-backend] Health check did not pass within timeout — app will retry in renderer')
+}
+
 function stopPythonBackend(): void {
+  if (isShuttingDown) return
+  isShuttingDown = true
   if (pythonProcess) {
     console.log('[python-backend] Terminating AI Backend process...')
     try {
       if (process.platform === 'win32' && pythonProcess.pid) {
-        spawn('taskkill', ['/pid', pythonProcess.pid.toString(), '/f', '/t'])
-      } else {
+        spawnSync('taskkill', ['/pid', pythonProcess.pid.toString(), '/f', '/t'], { stdio: 'ignore' })
+      } else if (pythonProcess.pid) {
         pythonProcess.kill('SIGTERM')
       }
     } catch (err) {
@@ -275,11 +303,15 @@ function setupIpcHandlers(): void {
 
       // Try Python backend first
       try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
         const response = await fetch('http://127.0.0.1:8000/api/save-project', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: controller.signal
         })
+        clearTimeout(timeout)
 
         if (response.ok) {
           const resData = await response.json()
@@ -317,13 +349,24 @@ function setupIpcHandlers(): void {
   // 3. Load Project
   ipcMain.handle('load-project', async (_event, filePath: string) => {
     try {
-      if (!fs.existsSync(filePath)) {
-        return { success: false, error: `File not found: ${filePath}`, data: null }
+      const resolved = resolve(filePath)
+      const workspace = getWorkspacePath()
+      if (!resolved.startsWith(workspace)) {
+        return { success: false, error: 'Access denied: file is outside workspace', data: null }
+      }
+
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: `File not found: ${resolved}`, data: null }
       }
 
       // Try Python backend first
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/load-project?path=${encodeURIComponent(filePath)}`)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
+        const response = await fetch(`http://127.0.0.1:8000/api/load-project?path=${encodeURIComponent(resolved)}`, {
+          signal: controller.signal
+        })
+        clearTimeout(timeout)
         if (response.ok) {
           const data = await response.json()
           return { success: true, data }
@@ -333,7 +376,7 @@ function setupIpcHandlers(): void {
       }
 
       // Native fallback
-      const fileBuf = await fs.promises.readFile(filePath)
+      const fileBuf = await fs.promises.readFile(resolved)
       const data = extractJsonFromZip(fileBuf)
       return { success: true, data }
     } catch (error: any) {
@@ -379,11 +422,15 @@ function setupIpcHandlers(): void {
 
       // Try Python backend with isAutoSave: true
       try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
         const response = await fetch('http://127.0.0.1:8000/api/save-project', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...data, project_name: safeName, isAutoSave: true })
+          body: JSON.stringify({ ...data, project_name: safeName, isAutoSave: true }),
+          signal: controller.signal
         })
+        clearTimeout(timeout)
         if (response.ok) {
           const resData = await response.json()
           return { success: true, filePath: resData.drop_file || autoSavePath }
@@ -433,9 +480,18 @@ function setupIpcHandlers(): void {
     return dialog.showSaveDialog(mainWindow, options)
   })
 
-  // 8. Read File As Base64
+  // 8. Read File As Base64 (workspace-restricted)
   ipcMain.handle('read-file-as-base64', async (_event, filePath: string) => {
-    const fileBuf = await fs.promises.readFile(filePath)
+    const resolved = resolve(filePath)
+    const workspace = getWorkspacePath()
+    if (!resolved.startsWith(workspace)) {
+      throw new Error('Access denied: file is outside workspace')
+    }
+    const stat = await fs.promises.stat(resolved)
+    if (stat.size > 500 * 1024 * 1024) {
+      throw new Error('File too large (max 500MB)')
+    }
+    const fileBuf = await fs.promises.readFile(resolved)
     return fileBuf.toString('base64')
   })
 
@@ -443,7 +499,7 @@ function setupIpcHandlers(): void {
   ipcMain.handle('get-backend-status', async () => {
     try {
       const response = await fetch('http://127.0.0.1:8000/api/ping', {
-        signal: AbortSignal.timeout(1500)
+        signal: AbortSignal.timeout(3000)
       })
       if (response.ok) {
         return { running: true, url: 'http://127.0.0.1:8000' }
@@ -504,7 +560,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     frame: true,
     autoHideMenuBar: true,
     backgroundColor: '#1a1a2e',
@@ -529,7 +585,7 @@ function createWindow(): void {
 
   // Timeout fallback if ready-to-show does not fire within 1500ms
   const forceShowTimer = setTimeout(() => {
-    if (mainWindow && !mainWindow.isVisible()) {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       console.warn('[electron] ready-to-show event timed out; forcing mainWindow.show()')
       mainWindow.show()
       mainWindow.focus()
@@ -592,15 +648,18 @@ app.on('window-all-closed', () => {
 })
 
 process.on('SIGTERM', () => {
+  if (isShuttingDown) return
   stopPythonBackend()
   process.exit(0)
 })
 
 process.on('SIGINT', () => {
+  if (isShuttingDown) return
   stopPythonBackend()
   process.exit(0)
 })
 
 process.on('exit', () => {
+  if (isShuttingDown) return
   stopPythonBackend()
 })

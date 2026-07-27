@@ -10,20 +10,6 @@
   ],
   "extraResources": [
     {
-      "from": "fileonnx",
-      "to": "fileonnx",
-      "filter": [
-        "**/*"
-      ]
-    },
-    {
-      "from": "resources",
-      "to": "resources",
-      "filter": [
-        "**/*"
-      ]
-    },
-    {
       "from": "backend/dist",
       "to": "backend/dist",
       "filter": [

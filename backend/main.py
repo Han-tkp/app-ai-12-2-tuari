@@ -320,7 +320,25 @@ class DropletSystem:
             new_data[-(i+1000)] = float(d)
         self.droplet_data = new_data
 
-system = DropletSystem()
+try:
+    system = DropletSystem()
+except Exception as e:
+    logger.critical("Failed to initialize DropletSystem at module level: %s", e)
+    # Create a minimal fallback so the server can still start and show errors
+    system = DropletSystem.__new__(DropletSystem)
+    system.lens = "4x"
+    system.session = None
+    system.input_name = ""
+    system.calibration_value = 0.75
+    system.profile = 1
+    system.tracker = None
+    system.counted_ids = set()
+    system.droplet_data = {}
+    system.frame_counter = 0
+    system.inference_skip = 3
+    system.pending_snapshot = False
+    system.buffer_skip_counter = 0
+    system.is_ai_active = False
 
 def _compute_slide_stats(droplets: list[float]) -> dict:
     """Compute Dv10, Dv50, Dv90, SPAN for a list of diameters."""
@@ -894,9 +912,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_path = docs / f"Snapshot_{timestamp}.jpg"
 
-                    if 'frame' in locals() and frame is not None:
+                    if frame is not None:
                         cv2.imwrite(str(snapshot_path), frame)
-                        logger.info(f"Snapshot saved: {snapshot_path}")
+                        logger.info("Snapshot saved: %s", snapshot_path)
                         await safe_send({"action": "snapshot_exported", "path": str(snapshot_path)})
                     else:
                         await safe_send({"action": "snapshot_export_error", "error": "No frame available"})
@@ -1392,7 +1410,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 unified_list.sort(key=lambda x: abs(x["id"]))
 
                 vmd, span, count, _, out_pct = system.calculate_stats()
-                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                _, buffer = await loop.run_in_executor(
+                    None, lambda: cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80]))
                 payload = {
                     "image": base64.b64encode(buffer).decode('utf-8'),
                     "vmd": float(vmd), "span": float(span), "count": int(count),

@@ -28,7 +28,7 @@ class ErrorBoundary extends Component<Props, State> {
     this.setState({ errorInfo });
     
     // Log to backend logging system (if available)
-    fetch('http://localhost:8000/api/log-error', {
+    fetch('http://127.0.0.1:8000/api/log-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

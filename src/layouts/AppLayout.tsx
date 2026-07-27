@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/sidebar/Sidebar';
 import TopDashboard from '../components/dashboard/TopDashboard';
 import Workspace from '../components/workspace/Workspace';
@@ -26,9 +26,10 @@ const AppLayout: React.FC = () => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showStartScreen, setShowStartScreen] = useState(true);
 
-  // Loading Screen states
+  // Backend connection states
   const [isBackendReady, setIsBackendReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [backendConnected, setBackendConnected] = useState(false);
 
   // Modal states for file operations
   const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
@@ -87,34 +88,39 @@ const AppLayout: React.FC = () => {
   }, [uiScale]);
 
   // ── Wait for Backend AI to be Ready ───────────────────────────────────────
+  const doCheckBackend = useCallback(async () => {
+    try {
+      const status = await window.electron.getBackendStatus();
+      setBackendConnected(status.running);
+      return status.running;
+    } catch {
+      setBackendConnected(false);
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     if (isBackendReady) return;
 
     let progress = 0;
     let retries = 0;
-    const MAX_RETRIES = 30;
+    const MAX_RETRIES = 60;
 
     const progressInterval = setInterval(() => {
-      progress += Math.floor(Math.random() * 5) + 2;
-      if (progress > 95) progress = 95;
+      progress += Math.floor(Math.random() * 3) + 1;
+      if (progress > 90) progress = 90;
       setLoadingProgress(progress);
-    }, 200);
+    }, 500);
 
     const checkBackend = async () => {
-      if (retries++ >= MAX_RETRIES) {
+      const running = await doCheckBackend();
+      if (running) {
         setLoadingProgress(100);
-        setTimeout(() => setIsBackendReady(true), 600);
-        return;
-      }
-      try {
-        const status = await window.electron.getBackendStatus();
-        if (status.running) {
-          setLoadingProgress(100);
-          setTimeout(() => setIsBackendReady(true), 600);
-        } else {
-          setTimeout(checkBackend, 500);
-        }
-      } catch (e) {
+        setTimeout(() => setIsBackendReady(true), 300);
+      } else if (++retries >= MAX_RETRIES) {
+        setLoadingProgress(100);
+        setTimeout(() => setIsBackendReady(true), 300);
+      } else {
         setTimeout(checkBackend, 500);
       }
     };
@@ -122,7 +128,18 @@ const AppLayout: React.FC = () => {
     checkBackend();
 
     return () => clearInterval(progressInterval);
-  }, [isBackendReady]);
+  }, [isBackendReady, doCheckBackend]);
+
+  // ── Continuous Backend Health Polling ────────────────────────────────────
+  useEffect(() => {
+    if (!isBackendReady) return;
+
+    const healthInterval = setInterval(async () => {
+      await doCheckBackend();
+    }, 5000);
+
+    return () => clearInterval(healthInterval);
+  }, [isBackendReady, doCheckBackend]);
 
   // ── Cleanup auto-save on clean exit ────────────────────────────────────────
   useEffect(() => {
@@ -552,6 +569,12 @@ const AppLayout: React.FC = () => {
           </span>
           <span className="text-[12px]" style={{ color: 'var(--text4)' }}>—</span>
           <span className="text-[12px]" style={{ color: 'var(--text3)' }}>{projectName}</span>
+          {!backendConnected && (
+            <span className="flex items-center gap-1 text-[11px] ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,59,48,0.15)', color: 'var(--mac-red)' }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--mac-red)] animate-pulse" />
+              Disconnected
+            </span>
+          )}
         </div>
 
         {/* Right cluster */}
