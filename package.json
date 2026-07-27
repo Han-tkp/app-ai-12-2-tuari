@@ -1,7 +1,11 @@
 {
   "name": "dropdetect-ai",
   "private": true,
-  "version": "2.0.7",
+"author": {
+  "name": "DDC 12.2 Songkhla",
+  "email": "ddc12.2@health.moph.go.th"
+},
+  "version": "2.1.0",
   "type": "module",
   "main": "out/main/main.js",
   "scripts": {
