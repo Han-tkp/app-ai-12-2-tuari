@@ -5,7 +5,7 @@
   "name": "DDC 12.2 Songkhla",
   "email": "ddc12.2@health.moph.go.th"
 },
-  "version": "2.1.1",
+  "version": "2.1.2",
   "type": "module",
   "main": "out/main/main.js",
   "scripts": {
