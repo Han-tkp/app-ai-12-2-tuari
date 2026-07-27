@@ -1,3 +1,0 @@
-name = "dropdetect-ai"
-pages_build_command = "cd website && npm ci && npm run build"
-pages_build_output_dir = "website/dist"
