@@ -27,6 +27,9 @@ export interface ElectronAPI {
   // OS File Drop Listener
   onFileDrop: (callback: (paths: string[]) => void) => () => void;
   getFilePath?: (file: File) => string;
+
+  // Backend Progress Listener (real IPC-based)
+  onBackendProgress: (callback: (progress: number, message: string) => void) => () => void;
 }
 
 declare global {

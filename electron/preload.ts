@@ -29,6 +29,13 @@ const electronAPI = {
     ipcRenderer.on('file-drop', listener)
     return () => ipcRenderer.removeListener('file-drop', listener)
   },
+
+  // Backend Progress Listener (real IPC-based)
+  onBackendProgress: (callback: (progress: number, message: string) => void) => {
+    const listener = (_event: any, data: { progress: number; message: string }) => callback(data.progress, data.message)
+    ipcRenderer.on('backend-progress', listener)
+    return () => ipcRenderer.removeListener('backend-progress', listener)
+  },
   
   // Workspace project scanner
   scanWorkspaceProjects: () => ipcRenderer.invoke('scan-workspace-projects'),

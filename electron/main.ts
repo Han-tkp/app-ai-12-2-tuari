@@ -84,14 +84,23 @@ function _doStartPythonBackend(): void {
       windowsHide: true
     })
 
+    const progressRegex = /^\[PROGRESS\]\s*(\d+)\|(.+)$/
+
     let stdoutBuffer = ''
     pythonProcess.stdout?.on('data', (data: Buffer) => {
       stdoutBuffer += data.toString()
       const lines = stdoutBuffer.split('\n')
       stdoutBuffer = lines.pop() || ''
       for (const line of lines) {
-        if (line.trim()) {
-          console.log(`[python-backend] ${line.trim()}`)
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        const m = trimmed.match(progressRegex)
+        if (m) {
+          const pct = parseInt(m[1], 10)
+          const msg = m[2]
+          mainWindow?.webContents.send('backend-progress', { progress: pct, message: msg })
+        } else {
+          console.log(`[python-backend] ${trimmed}`)
         }
       }
     })

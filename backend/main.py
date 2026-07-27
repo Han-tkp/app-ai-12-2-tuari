@@ -86,6 +86,13 @@ PROFILE_TRACK_BUFFER = {"low": 90, "mid": 60, "high": 30}
 # Letterbox constant: 640×480 camera → 640×640 model input (80px top+bottom padding)
 PAD_TOP = 80
 
+# ── Real-time progress reporting (parsed by Electron via stdout) ──────────────
+def report_progress(pct: int, msg: str):
+    """Write a machine-parseable progress line to stdout.
+    Electron main process reads lines matching ``[PROGRESS] pct|msg``
+    and forwards them to the renderer as IPC event `backend-progress`."""
+    print(f"[PROGRESS] {pct}|{msg}", flush=True)
+
 # ── Language Settings ────────────────────────────────────────────────────────
 class LanguageConfig:
     """Configuration for Excel export language."""
@@ -241,6 +248,7 @@ class ManualDataRequest(BaseModel):
 
 class DropletSystem:
     def __init__(self):
+        report_progress(5, "Initializing core systems...")
         self.lens = "10x"
         self.session = None
         self.calibration_value = 2.7926330340561596e-07
@@ -254,7 +262,9 @@ class DropletSystem:
         self.inference_skip = PROFILE_SKIP[self.profile]
         self.frame_counter = 0
         self.imported_media_path: str | None = None  # Path to imported media
+        report_progress(20, "Loading detection model...")
         self.load_resources("10x")
+        report_progress(100, "Ready")
         logger.info("DropletSystem init — profile=%s  RAM=%.1f GB  skip=1/%d",
                     self.profile,
                     psutil.virtual_memory().total / (1024 ** 3),
@@ -277,18 +287,22 @@ class DropletSystem:
         model_path = os.path.join(BASE_DIR, "fileonnx", f"yolov8n_{lens}.onnx")
         json_path = os.path.join(BASE_DIR, "resources", f"{lens}.json")
         if os.path.exists(model_path):
+            report_progress(40, "Loading ONNX model into memory...")
             self.session = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
             self.input_name = self.session.get_inputs()[0].name
+            report_progress(60, "ONNX model loaded successfully")
             logger.info("Loaded ONNX model: %s", model_path)
         else:
             logger.error("ONNX model NOT FOUND: %s (BASE_DIR=%s)", model_path, BASE_DIR)
             self.session = None
         if os.path.exists(json_path):
+            report_progress(75, "Loading calibration data...")
             with open(json_path, 'r') as f:
                 data = json.load(f)
                 for cal in data['calibrations']:
                     if cal['name'].lower() == lens.lower():
                         self.calibration_value = cal['value']
+        report_progress(90, "Finalizing initialization...")
         self.reset_stats()
 
     def reset_stats(self):

@@ -26,6 +26,8 @@ const AppLayout: React.FC = () => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showStartScreen, setShowStartScreen] = useState(true);
 
+  const APP_VERSION = '2.1.4';
+
   // Backend connection states
   const [isBackendReady, setIsBackendReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -37,7 +39,6 @@ const AppLayout: React.FC = () => {
 
   // Version-aware first-run check — show loading screen on version change or first install
   useEffect(() => {
-    const APP_VERSION = '2.1.3';
     const stored = localStorage.getItem('dd-first-run-complete');
     if (stored && stored === APP_VERSION) {
       setIsFirstRun(false);
@@ -123,7 +124,7 @@ const AppLayout: React.FC = () => {
     }
   }, [uiScale]);
 
-  // ── Wait for Backend AI to be Ready ───────────────────────────────────────
+  // ── Wait for Backend AI to be Ready (real IPC-based progress) ──────────────
   const doCheckBackend = useCallback(async () => {
     try {
       const status = await window.electron.getBackendStatus();
@@ -135,39 +136,38 @@ const AppLayout: React.FC = () => {
     }
   }, []);
 
+  // Listen to real backend progress via stdout IPC
+  useEffect(() => {
+    if (!isFirstRun) return;
+    const unsub = window.electron.onBackendProgress((progress, message) => {
+      setLoadingProgress(progress);
+      setLoadingMessage(message);
+    });
+    return unsub;
+  }, [isFirstRun]);
+
+  // Poll HTTP health — final signal that backend server is fully up
   useEffect(() => {
     if (isBackendReady) return;
     if (!isFirstRun) return;
 
     let retries = 0;
-    const MAX_RETRIES = 60;
-
-    const messages = [
-      'Initializing Core Systems...',
-      'Connecting to AI Backend...',
-      'Loading Detection Models...',
-      'Starting Local Server...',
-      'Calibrating Sensors...',
-      'Preparing Workspace...',
-      'Almost Ready...',
-    ];
+    const MAX_RETRIES = 90; // 45s timeout (500ms each)
+    let receivedProgress100 = false;
 
     const checkBackend = async () => {
-      setLoadingProgress(Math.min(Math.round((retries / MAX_RETRIES) * 90), 90));
-      setLoadingMessage(messages[Math.min(retries, messages.length - 1)]);
-
       const running = await doCheckBackend();
       if (running) {
         setLoadingProgress(100);
         setLoadingMessage('Ready!');
-        localStorage.setItem('dd-first-run-complete', '2.1.3');
+        localStorage.setItem('dd-first-run-complete', APP_VERSION);
         const elapsed = Date.now() - loadingStartRef.current;
         const delay = Math.max(0, MIN_LOADING_MS - elapsed);
         setTimeout(() => { window.electron?.exitFullscreen(); setIsBackendReady(true); }, delay);
       } else if (++retries >= MAX_RETRIES) {
         setLoadingProgress(100);
         setLoadingMessage('Starting...');
-        localStorage.setItem('dd-first-run-complete', '2.1.3');
+        localStorage.setItem('dd-first-run-complete', APP_VERSION);
         const elapsed = Date.now() - loadingStartRef.current;
         const delay = Math.max(0, MIN_LOADING_MS - elapsed);
         setTimeout(() => { window.electron?.exitFullscreen(); setIsBackendReady(true); }, delay);
