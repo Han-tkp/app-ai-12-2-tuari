@@ -45,6 +45,7 @@ const AppLayout: React.FC = () => {
     } else {
       setIsFirstRun(true);
       loadingStartRef.current = Date.now();
+      window.electron?.enterFullscreen();
     }
   }, []);
 
@@ -162,14 +163,14 @@ const AppLayout: React.FC = () => {
         localStorage.setItem('dd-first-run-complete', '2.1.3');
         const elapsed = Date.now() - loadingStartRef.current;
         const delay = Math.max(0, MIN_LOADING_MS - elapsed);
-        setTimeout(() => setIsBackendReady(true), delay);
+        setTimeout(() => { window.electron?.exitFullscreen(); setIsBackendReady(true); }, delay);
       } else if (++retries >= MAX_RETRIES) {
         setLoadingProgress(100);
         setLoadingMessage('Starting...');
         localStorage.setItem('dd-first-run-complete', '2.1.3');
         const elapsed = Date.now() - loadingStartRef.current;
         const delay = Math.max(0, MIN_LOADING_MS - elapsed);
-        setTimeout(() => setIsBackendReady(true), delay);
+        setTimeout(() => { window.electron?.exitFullscreen(); setIsBackendReady(true); }, delay);
       } else {
         setTimeout(checkBackend, 500);
       }

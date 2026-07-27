@@ -20,6 +20,8 @@ export interface ElectronAPI {
   closeWindow: () => void;
   minimizeWindow: () => void;
   toggleMaximizeWindow: () => void;
+  enterFullscreen: () => void;
+  exitFullscreen: () => void;
   setZoomFactor: (factor: number) => void;
 
   // OS File Drop Listener

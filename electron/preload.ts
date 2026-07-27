@@ -19,6 +19,8 @@ const electronAPI = {
   closeWindow: () => ipcRenderer.send('window-close'),
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   toggleMaximizeWindow: () => ipcRenderer.send('window-toggle-maximize'),
+  enterFullscreen: () => ipcRenderer.send('enter-fullscreen-loading'),
+  exitFullscreen: () => ipcRenderer.send('exit-fullscreen-loading'),
   setZoomFactor: (factor: number) => webFrame.setZoomFactor(factor),
 
   // OS File Drop Listener

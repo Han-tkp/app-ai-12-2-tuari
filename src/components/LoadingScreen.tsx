@@ -50,98 +50,80 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center select-none"
-      style={{ background: 'color-mix(in srgb, var(--bg-window) 85%, transparent)', backdropFilter: 'blur(4px)' }}
-    >
-      <div
-        className="w-[540px] overflow-hidden shadow-2xl"
-        style={{ background: 'var(--bg-window)', border: '0.5px solid var(--border)', borderRadius: 12 }}
-      >
-        {/* ══ Title bar ══ */}
-        <div
-          className="flex items-center justify-between px-3.5 py-2"
-          style={{ borderBottom: '0.5px solid var(--border)', background: 'var(--bg-surface)' }}
-        >
-          <div className="flex items-center gap-2">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <circle cx="6" cy="6" r="4.5" stroke="var(--accent)" strokeWidth="1.2" />
-              <circle cx="6" cy="6" r="1.5" fill="var(--accent)" />
-            </svg>
-            <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 500 }}>DropDetect AI Setup</span>
-          </div>
-          <div className="flex gap-2.5" style={{ color: 'var(--text4)', fontSize: 12 }}>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="5.5" width="10" height="1" rx="0.5" fill="currentColor"/></svg>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1"/></svg>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="1"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1"/></svg>
-          </div>
-        </div>
+    <div className="fixed inset-0 z-[9999] overflow-hidden select-none">
+      {/* Slideshow background */}
+      {SLIDE_IMAGES.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
+          style={{ opacity: i === currentSlide ? 1 : 0 }}
+        />
+      ))}
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.55))' }} />
 
-        {/* ══ Body — slideshow + tip ══ */}
-        <div className="relative h-[260px] overflow-hidden">
-          {/* Slideshow background */}
-          {SLIDE_IMAGES.map((src, i) => (
-            <img
-              key={src}
-              src={src}
-              alt=""
-              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
-              style={{ opacity: i === currentSlide ? 1 : 0 }}
-            />
-          ))}
-          {/* Darken overlay for text readability */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5))' }} />
-
-          {/* Brand — top center */}
-          <div className="absolute top-5 left-0 right-0 flex items-center justify-center gap-2 z-10">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <rect x="0.5" y="0.5" width="19" height="19" rx="4.5" stroke="white" strokeWidth="1" opacity="0.8"/>
-              <circle cx="10" cy="10" r="5" fill="white" opacity="0.3"/>
-              <circle cx="10" cy="10" r="2.5" fill="white"/>
-            </svg>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: '0.01em', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-              DropDetect <span style={{ opacity: 0.85 }}>AI</span>
+      {/* Centered content */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-6">
+        {/* Brand */}
+        <div className="flex items-center gap-3 mb-10">
+          <svg width="32" height="32" viewBox="0 0 512 512" fill="none">
+            <rect x="16" y="16" width="480" height="480" rx="80" stroke="white" strokeWidth="24" opacity="0.85"/>
+            <circle cx="248" cy="248" r="136" stroke="white" strokeWidth="20" opacity="0.8"/>
+            <circle cx="268" cy="268" r="40" fill="white" opacity="0.7"/>
+            <circle cx="190" cy="204" r="28" fill="white" opacity="0.55"/>
+            <circle cx="200" cy="310" r="18" fill="white" opacity="0.45"/>
+            <circle cx="312" cy="196" r="16" fill="white" opacity="0.4"/>
+            <line x1="348" y1="358" x2="420" y2="430" stroke="white" strokeWidth="24" strokeLinecap="round" opacity="0.6"/>
+          </svg>
+          <div>
+            <span className="block text-2xl font-bold tracking-tight" style={{ color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.35)' }}>
+              DropDetect <span style={{ opacity: 0.8 }}>AI</span>
+            </span>
+            <span className="block text-xs font-medium tracking-widest uppercase mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              Spray Droplet Analysis Platform
             </span>
           </div>
-
-          {/* Glass-blur tip card */}
-          <div
-            className="absolute bottom-5 left-5 right-5 z-10 px-4 py-3 rounded-xl transition-opacity duration-500"
-            style={{
-              background: 'rgba(255,255,255,0.08)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              border: '0.5px solid rgba(255,255,255,0.12)',
-            }}
-          >
-            <p className="m-0 text-center" style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, fontWeight: 400 }}>
-              {TIPS[tipIndex]}
-            </p>
-          </div>
         </div>
 
-        {/* ══ Progress ══ */}
-        <div className="px-5 py-3" style={{ borderTop: '0.5px solid var(--border)' }}>
-          <p className="m-0 mb-2" style={{ fontSize: 11, color: 'var(--text3)' }}>{message}</p>
-          <div className="flex items-center gap-2.5">
-            <div className="flex-1" style={{ height: 4, background: 'var(--bg-surface)', borderRadius: 4, overflow: 'hidden' }}>
+        {/* Glass-blur tip card */}
+        <div
+          className="max-w-[480px] w-full px-5 py-4 rounded-2xl transition-opacity duration-500 mb-10"
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '0.5px solid rgba(255,255,255,0.12)',
+          }}
+        >
+          <p className="m-0 text-center text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.92)', fontWeight: 400 }}>
+            {TIPS[tipIndex]}
+          </p>
+        </div>
+
+        {/* Progress */}
+        <div className="w-[400px] max-w-full mb-4">
+          <p className="m-0 mb-2 text-xs font-medium text-center" style={{ color: 'rgba(255,255,255,0.65)' }}>
+            {message}
+          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex-1" style={{ height: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 4, overflow: 'hidden' }}>
               <div className="h-full transition-all duration-500 ease-out"
-                style={{ width: `${progress}%`, background: 'var(--accent)', borderRadius: 4 }} />
+                style={{ width: `${progress}%`, background: '#fff', borderRadius: 4, opacity: 0.85 }} />
             </div>
-            <span className="tabular-nums shrink-0" style={{ fontSize: 11, color: 'var(--text3)', minWidth: 30, textAlign: 'right' }}>
+            <span className="tabular-nums shrink-0 text-xs font-medium" style={{ color: 'rgba(255,255,255,0.6)', minWidth: 32, textAlign: 'right' }}>
               {progress}%
             </span>
           </div>
         </div>
 
-        {/* ══ Footer ══ */}
-        <div className="flex items-center justify-between px-5 py-2.5"
-          style={{ borderTop: '0.5px solid var(--border)', background: 'var(--bg-surface)' }}
-        >
-          <div className="flex gap-3 flex-wrap" style={{ fontSize: 10 }}>
+        {/* Steps + Start */}
+        <div className="flex items-center justify-between w-[400px] max-w-full">
+          <div className="flex gap-4">
             {STEPS.map((step, i) => (
-              <span key={step} className="transition-colors duration-300" style={{
-                color: i < activeStep ? 'var(--accent-text)' : i === activeStep ? 'var(--text1)' : 'var(--text4)',
-                fontWeight: i <= activeStep ? 600 : 400,
+              <span key={step} className="transition-all duration-300 text-[11px] font-medium" style={{
+                color: i < activeStep ? 'rgba(255,255,255,0.9)' : i === activeStep ? '#fff' : 'rgba(255,255,255,0.3)',
+                textShadow: i <= activeStep ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
               }}>
                 {step}
               </span>
@@ -149,10 +131,10 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
           </div>
 
           <button
-            className="border-none px-4 py-1.5 text-[11px] font-medium rounded-md transition-all"
+            className="border-none px-5 py-1.5 text-[12px] font-semibold rounded-lg transition-all"
             style={{
-              background: progress >= 100 ? 'var(--accent)' : 'var(--bg-surface2)',
-              color: progress >= 100 ? '#fff' : 'var(--text4)',
+              background: progress >= 100 ? '#fff' : 'rgba(255,255,255,0.1)',
+              color: progress >= 100 ? '#000' : 'rgba(255,255,255,0.35)',
               cursor: progress >= 100 ? 'pointer' : 'default',
             }}
             disabled={progress < 100}

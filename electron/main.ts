@@ -593,6 +593,19 @@ function setupIpcHandlers(): void {
   ipcMain.on('minimizeWindow', minWin)
   ipcMain.on('window-toggle-maximize', toggleMaxWin)
   ipcMain.on('toggleMaximizeWindow', toggleMaxWin)
+
+  // 12. Fullscreen Loading Controls
+  ipcMain.on('enter-fullscreen-loading', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFullScreen()) {
+      mainWindow.setFullScreen(true)
+    }
+  })
+
+  ipcMain.on('exit-fullscreen-loading', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen()) {
+      mainWindow.setFullScreen(false)
+    }
+  })
 }
 
 // ── Window Creation ───────────────────────────────────────────────────────
