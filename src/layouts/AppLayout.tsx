@@ -4,7 +4,6 @@ import TopDashboard from '../components/dashboard/TopDashboard';
 import Workspace from '../components/workspace/Workspace';
 import SettingsWindow from '../components/SettingsWindow';
 import StartScreen, { addRecentProject } from '../components/StartScreen';
-import LoadingScreen from '../components/LoadingScreen';
 import { useAppStore } from '../store/useAppStore';
 import { ChevronDown, FolderOpen, Save, FilePlus, LogOut, Download, Minus, Square, X, Cloud, CloudOff, AlertCircle, Home } from 'lucide-react';
 import { AUTO_SAVE_INTERVAL } from '../store/useAppStore';
@@ -26,29 +25,8 @@ const AppLayout: React.FC = () => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showStartScreen, setShowStartScreen] = useState(true);
 
-  const APP_VERSION = '2.1.4';
-
-  // Backend connection states
-  const [isBackendReady, setIsBackendReady] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
+  // Backend connection state (for Disconnected badge)
   const [backendConnected, setBackendConnected] = useState(false);
-  const [isFirstRun, setIsFirstRun] = useState(true);
-  const loadingStartRef = useRef<number>(Date.now());
-  const MIN_LOADING_MS = 4000;
-
-  // Version-aware first-run check — show loading screen on version change or first install
-  useEffect(() => {
-    const stored = localStorage.getItem('dd-first-run-complete');
-    if (stored && stored === APP_VERSION) {
-      setIsFirstRun(false);
-      setIsBackendReady(true);
-    } else {
-      setIsFirstRun(true);
-      loadingStartRef.current = Date.now();
-      window.electron?.enterFullscreen();
-    }
-  }, []);
 
   // Modal states for file operations
   const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
@@ -124,7 +102,7 @@ const AppLayout: React.FC = () => {
     }
   }, [uiScale]);
 
-  // ── Wait for Backend AI to be Ready (real IPC-based progress) ──────────────
+  // ── Continuous Backend Health Polling ────────────────────────────────────
   const doCheckBackend = useCallback(async () => {
     try {
       const status = await window.electron.getBackendStatus();
@@ -136,59 +114,13 @@ const AppLayout: React.FC = () => {
     }
   }, []);
 
-  // Listen to real backend progress via stdout IPC
   useEffect(() => {
-    if (!isFirstRun) return;
-    const unsub = window.electron.onBackendProgress((progress, message) => {
-      setLoadingProgress(progress);
-      setLoadingMessage(message);
-    });
-    return unsub;
-  }, [isFirstRun]);
-
-  // Poll HTTP health — final signal that backend server is fully up
-  useEffect(() => {
-    if (isBackendReady) return;
-    if (!isFirstRun) return;
-
-    let retries = 0;
-    const MAX_RETRIES = 90; // 45s timeout (500ms each)
-    let receivedProgress100 = false;
-
-    const checkBackend = async () => {
-      const running = await doCheckBackend();
-      if (running) {
-        setLoadingProgress(100);
-        setLoadingMessage('Ready!');
-        localStorage.setItem('dd-first-run-complete', APP_VERSION);
-        const elapsed = Date.now() - loadingStartRef.current;
-        const delay = Math.max(0, MIN_LOADING_MS - elapsed);
-        setTimeout(() => { window.electron?.exitFullscreen(); setIsBackendReady(true); }, delay);
-      } else if (++retries >= MAX_RETRIES) {
-        setLoadingProgress(100);
-        setLoadingMessage('Starting...');
-        localStorage.setItem('dd-first-run-complete', APP_VERSION);
-        const elapsed = Date.now() - loadingStartRef.current;
-        const delay = Math.max(0, MIN_LOADING_MS - elapsed);
-        setTimeout(() => { window.electron?.exitFullscreen(); setIsBackendReady(true); }, delay);
-      } else {
-        setTimeout(checkBackend, 500);
-      }
-    };
-
-    checkBackend();
-  }, [isBackendReady, doCheckBackend, isFirstRun]);
-
-  // ── Continuous Backend Health Polling ────────────────────────────────────
-  useEffect(() => {
-    if (!isBackendReady) return;
-
     const healthInterval = setInterval(async () => {
       await doCheckBackend();
     }, 5000);
 
     return () => clearInterval(healthInterval);
-  }, [isBackendReady, doCheckBackend]);
+  }, [doCheckBackend]);
 
   // ── Cleanup auto-save on clean exit ────────────────────────────────────────
   useEffect(() => {
@@ -355,8 +287,6 @@ const AppLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden flex-col font-sans select-none relative bg-[var(--bg-window)] text-[var(--text1)]">
-      {isFirstRun && !isBackendReady && <LoadingScreen progress={loadingProgress} message={loadingMessage} />}
-      
       <SettingsWindow />
 
       {/* ── Recovery Dialog ─────────────────────────────────────────────────── */}

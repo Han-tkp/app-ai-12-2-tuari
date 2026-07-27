@@ -20,16 +20,11 @@ export interface ElectronAPI {
   closeWindow: () => void;
   minimizeWindow: () => void;
   toggleMaximizeWindow: () => void;
-  enterFullscreen: () => void;
-  exitFullscreen: () => void;
   setZoomFactor: (factor: number) => void;
 
   // OS File Drop Listener
   onFileDrop: (callback: (paths: string[]) => void) => () => void;
   getFilePath?: (file: File) => string;
-
-  // Backend Progress Listener (real IPC-based)
-  onBackendProgress: (callback: (progress: number, message: string) => void) => () => void;
 }
 
 declare global {

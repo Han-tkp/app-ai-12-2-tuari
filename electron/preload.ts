@@ -19,8 +19,6 @@ const electronAPI = {
   closeWindow: () => ipcRenderer.send('window-close'),
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   toggleMaximizeWindow: () => ipcRenderer.send('window-toggle-maximize'),
-  enterFullscreen: () => ipcRenderer.send('enter-fullscreen-loading'),
-  exitFullscreen: () => ipcRenderer.send('exit-fullscreen-loading'),
   setZoomFactor: (factor: number) => webFrame.setZoomFactor(factor),
 
   // OS File Drop Listener
@@ -28,13 +26,6 @@ const electronAPI = {
     const listener = (_event: any, paths: string[]) => callback(paths)
     ipcRenderer.on('file-drop', listener)
     return () => ipcRenderer.removeListener('file-drop', listener)
-  },
-
-  // Backend Progress Listener (real IPC-based)
-  onBackendProgress: (callback: (progress: number, message: string) => void) => {
-    const listener = (_event: any, data: { progress: number; message: string }) => callback(data.progress, data.message)
-    ipcRenderer.on('backend-progress', listener)
-    return () => ipcRenderer.removeListener('backend-progress', listener)
   },
   
   // Workspace project scanner

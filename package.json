@@ -5,15 +5,17 @@
   "name": "DDC 12.2 Songkhla",
   "email": "ddc12.2@health.moph.go.th"
 },
-  "version": "2.1.4",
+  "version": "2.1.5",
   "type": "module",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build:backend": "cd backend && .\\venv\\Scripts\\python.exe -m PyInstaller build_backend.spec --clean",
-    "build": "npm run build:backend && electron-vite build && electron-builder --win",
+    "build": "npm run build:backend && electron-vite build && electron-builder --win --linux --mac",
     "preview": "electron-vite preview",
-    "build:win": "electron-vite build && electron-builder --win"
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:mac": "electron-vite build && electron-builder --mac"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",
