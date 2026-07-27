@@ -31,16 +31,20 @@ const AppLayout: React.FC = () => {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [backendConnected, setBackendConnected] = useState(false);
-  const [isFirstRun, setIsFirstRun] = useState(false);
+  const [isFirstRun, setIsFirstRun] = useState(true);
+  const loadingStartRef = useRef<number>(Date.now());
+  const MIN_LOADING_MS = 4000;
 
-  // Check if this is the first run (no backend init before)
+  // Version-aware first-run check — show loading screen on version change or first install
   useEffect(() => {
-    const firstRunDone = localStorage.getItem('dd-first-run-complete');
-    if (!firstRunDone) {
-      setIsFirstRun(true);
-    } else {
-      // Subsequent runs: skip loading screen, let Disconnected badge handle it
+    const APP_VERSION = '2.1.3';
+    const stored = localStorage.getItem('dd-first-run-complete');
+    if (stored && stored === APP_VERSION) {
+      setIsFirstRun(false);
       setIsBackendReady(true);
+    } else {
+      setIsFirstRun(true);
+      loadingStartRef.current = Date.now();
     }
   }, []);
 
@@ -155,13 +159,17 @@ const AppLayout: React.FC = () => {
       if (running) {
         setLoadingProgress(100);
         setLoadingMessage('Ready!');
-        localStorage.setItem('dd-first-run-complete', 'true');
-        setTimeout(() => setIsBackendReady(true), 300);
+        localStorage.setItem('dd-first-run-complete', '2.1.3');
+        const elapsed = Date.now() - loadingStartRef.current;
+        const delay = Math.max(0, MIN_LOADING_MS - elapsed);
+        setTimeout(() => setIsBackendReady(true), delay);
       } else if (++retries >= MAX_RETRIES) {
         setLoadingProgress(100);
         setLoadingMessage('Starting...');
-        localStorage.setItem('dd-first-run-complete', 'true');
-        setTimeout(() => setIsBackendReady(true), 300);
+        localStorage.setItem('dd-first-run-complete', '2.1.3');
+        const elapsed = Date.now() - loadingStartRef.current;
+        const delay = Math.max(0, MIN_LOADING_MS - elapsed);
+        setTimeout(() => setIsBackendReady(true), delay);
       } else {
         setTimeout(checkBackend, 500);
       }
