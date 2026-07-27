@@ -29,7 +29,20 @@ const AppLayout: React.FC = () => {
   // Backend connection states
   const [isBackendReady, setIsBackendReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [backendConnected, setBackendConnected] = useState(false);
+  const [isFirstRun, setIsFirstRun] = useState(false);
+
+  // Check if this is the first run (no backend init before)
+  useEffect(() => {
+    const firstRunDone = localStorage.getItem('dd-first-run-complete');
+    if (!firstRunDone) {
+      setIsFirstRun(true);
+    } else {
+      // Subsequent runs: skip loading screen, let Disconnected badge handle it
+      setIsBackendReady(true);
+    }
+  }, []);
 
   // Modal states for file operations
   const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
@@ -119,24 +132,35 @@ const AppLayout: React.FC = () => {
 
   useEffect(() => {
     if (isBackendReady) return;
+    if (!isFirstRun) return;
 
-    let progress = 0;
     let retries = 0;
     const MAX_RETRIES = 60;
 
-    const progressInterval = setInterval(() => {
-      progress += Math.floor(Math.random() * 3) + 1;
-      if (progress > 90) progress = 90;
-      setLoadingProgress(progress);
-    }, 500);
+    const messages = [
+      'Initializing Core Systems...',
+      'Connecting to AI Backend...',
+      'Loading Detection Models...',
+      'Starting Local Server...',
+      'Calibrating Sensors...',
+      'Preparing Workspace...',
+      'Almost Ready...',
+    ];
 
     const checkBackend = async () => {
+      setLoadingProgress(Math.min(Math.round((retries / MAX_RETRIES) * 90), 90));
+      setLoadingMessage(messages[Math.min(retries, messages.length - 1)]);
+
       const running = await doCheckBackend();
       if (running) {
         setLoadingProgress(100);
+        setLoadingMessage('Ready!');
+        localStorage.setItem('dd-first-run-complete', 'true');
         setTimeout(() => setIsBackendReady(true), 300);
       } else if (++retries >= MAX_RETRIES) {
         setLoadingProgress(100);
+        setLoadingMessage('Starting...');
+        localStorage.setItem('dd-first-run-complete', 'true');
         setTimeout(() => setIsBackendReady(true), 300);
       } else {
         setTimeout(checkBackend, 500);
@@ -144,9 +168,7 @@ const AppLayout: React.FC = () => {
     };
 
     checkBackend();
-
-    return () => clearInterval(progressInterval);
-  }, [isBackendReady, doCheckBackend]);
+  }, [isBackendReady, doCheckBackend, isFirstRun]);
 
   // ── Continuous Backend Health Polling ────────────────────────────────────
   useEffect(() => {
@@ -324,7 +346,7 @@ const AppLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden flex-col font-sans select-none relative bg-[var(--bg-window)] text-[var(--text1)]">
-      {!isBackendReady && <LoadingScreen progress={loadingProgress} />}
+      {isFirstRun && !isBackendReady && <LoadingScreen progress={loadingProgress} message={loadingMessage} />}
       
       <SettingsWindow />
 
