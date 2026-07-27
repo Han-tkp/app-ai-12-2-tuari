@@ -1,5 +1,24 @@
 import React, { useEffect, useState } from 'react';
 
+const SLIDE_IMAGES = Array.from({ length: 7 }, (_, i) => `./appdrpai/${i + 1}.png`);
+
+const TIPS = [
+  'Analyze droplet sizes in real-time using AI-powered YOLOv8 object detection.',
+  'Switch between 4x and 10x objective lenses for different magnification levels.',
+  'Export WHO-compliant spray droplet analysis reports to Microsoft Excel.',
+  'Use manual annotation tools (Circle, Rect, Line) for precise measurements.',
+  'Import images or video files for offline batch analysis.',
+  'Auto-save keeps your work safe every 30 seconds — never lose data.',
+  'Track droplet statistics with ByteTrack — VMD, Span, and size distribution.',
+  'Quick-export session data or export full project with all slides included.',
+  'Customize AI confidence threshold, theme, and language in Settings.',
+  'Drag and drop media files directly into the workspace for instant analysis.',
+  'Apply spread factor correction based on crater size for accurate volume.',
+  'Monitor FPS and RAM usage in real-time from the workspace status bar.',
+  'Review auto-saved sessions on startup with the recovery dialog.',
+  'Switch between Dark, Light, and Warm themes to suit your environment.',
+];
+
 const STEPS = ['Init', 'Models', 'Server', 'Calibrate', 'Ready'];
 
 interface LoadingScreenProps {
@@ -9,6 +28,26 @@ interface LoadingScreenProps {
 
 const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
   const activeStep = Math.min(Math.floor((progress / 100) * STEPS.length), STEPS.length - 1);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    const slideTimer = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % SLIDE_IMAGES.length);
+    }, 4000);
+    return () => clearInterval(slideTimer);
+  }, []);
+
+  useEffect(() => {
+    const tipTimer = setInterval(() => {
+      setTipIndex(prev => {
+        let next;
+        do { next = Math.floor(Math.random() * TIPS.length); } while (next === prev && TIPS.length > 1);
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(tipTimer);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center select-none"
@@ -37,29 +76,47 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
           </div>
         </div>
 
-        {/* ══ Body ══ */}
-        <div className="relative px-8 py-14 text-center">
-          <div className="absolute" style={{ top: 14, left: 16, color: 'var(--text4)', opacity: 0.4, fontSize: 24 }}>△</div>
-          <div className="absolute" style={{ bottom: 14, right: 16, color: 'var(--text4)', opacity: 0.3, fontSize: 24 }}>◇</div>
+        {/* ══ Body — slideshow + tip ══ */}
+        <div className="relative h-[260px] overflow-hidden">
+          {/* Slideshow background */}
+          {SLIDE_IMAGES.map((src, i) => (
+            <img
+              key={src}
+              src={src}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
+              style={{ opacity: i === currentSlide ? 1 : 0 }}
+            />
+          ))}
+          {/* Darken overlay for text readability */}
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5))' }} />
 
-          <div className="flex items-center justify-center gap-2 mb-3">
+          {/* Brand — top center */}
+          <div className="absolute top-5 left-0 right-0 flex items-center justify-center gap-2 z-10">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <rect x="0.5" y="0.5" width="19" height="19" rx="4.5" stroke="var(--accent)" strokeWidth="1"/>
-              <circle cx="10" cy="10" r="5" fill="var(--accent)" opacity="0.25"/>
-              <circle cx="10" cy="10" r="2.5" fill="var(--accent)"/>
+              <rect x="0.5" y="0.5" width="19" height="19" rx="4.5" stroke="white" strokeWidth="1" opacity="0.8"/>
+              <circle cx="10" cy="10" r="5" fill="white" opacity="0.3"/>
+              <circle cx="10" cy="10" r="2.5" fill="white"/>
             </svg>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text1)', letterSpacing: '0.01em' }}>
-              DropDetect <span style={{ color: 'var(--accent-text)' }}>AI</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: '0.01em', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
+              DropDetect <span style={{ opacity: 0.85 }}>AI</span>
             </span>
           </div>
 
-          <h2 className="m-0" style={{ fontSize: 16, fontWeight: 600, color: 'var(--text1)', marginBottom: 8 }}>
-            Preparing your workspace
-          </h2>
-          <p className="m-0" style={{ maxWidth: 380, margin: '0 auto', fontSize: 12, color: 'var(--text2)', lineHeight: 1.7 }}>
-            Initializing core systems and loading AI detection models.
-            <br />This may take a few moments on first launch.
-          </p>
+          {/* Glass-blur tip card */}
+          <div
+            className="absolute bottom-5 left-5 right-5 z-10 px-4 py-3 rounded-xl transition-opacity duration-500"
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '0.5px solid rgba(255,255,255,0.12)',
+            }}
+          >
+            <p className="m-0 text-center" style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, fontWeight: 400 }}>
+              {TIPS[tipIndex]}
+            </p>
+          </div>
         </div>
 
         {/* ══ Progress ══ */}
