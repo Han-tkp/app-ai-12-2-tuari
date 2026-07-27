@@ -53,6 +53,7 @@ export function DownloadCenter({ os, release, loading, error }: DownloadCenterPr
     {
       id: "deb",
       icon: Terminal,
+      beta: true,
       title: t('download.linuxDebTitle'),
       platform: "Debian / Ubuntu 20.04+",
       version: "v1.2.2",
@@ -68,6 +69,7 @@ export function DownloadCenter({ os, release, loading, error }: DownloadCenterPr
     {
       id: "appimage",
       icon: Terminal,
+      beta: true,
       title: t('download.linuxAppImageTitle'),
       platform: "Linux Distributions (Universal)",
       version: "v1.2.2",
@@ -83,6 +85,7 @@ export function DownloadCenter({ os, release, loading, error }: DownloadCenterPr
     {
       id: "rpm",
       icon: Terminal,
+      beta: true,
       title: t('download.linuxRpmTitle'),
       platform: "Fedora 36+ / RHEL / CentOS",
       version: "v1.2.2",
@@ -138,6 +141,11 @@ export function DownloadCenter({ os, release, loading, error }: DownloadCenterPr
               {card.recommended && (
                 <span className="absolute -top-3 right-6 rounded-full bg-brand-600 px-3 py-0.5 text-xs font-semibold text-white shadow-sm">
                   {t('download.yourOs')}
+                </span>
+              )}
+              {card.beta && !card.recommended && (
+                <span className="absolute -top-3 right-6 rounded-full bg-amber-500 px-3 py-0.5 text-xs font-semibold text-white shadow-sm">
+                  Beta
                 </span>
               )}
 

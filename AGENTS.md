@@ -9,7 +9,7 @@ The repo migrated from Tauri to **Electron**. The file `CLAUDE.md` and `QWEN.md`
 - **Desktop shell**: Electron v34 (electron-vite v5). Main process at `electron/main.ts` spawns Python as a sidecar.
 - **Frontend**: React 19 + TypeScript + Zustand + Tailwind CSS v4 + react-konva. Entry: `src/main.tsx`. Renderer alias: `@renderer/*` → `src/*`.
 - **Backend**: Single-file Python/FastAPI at `backend/main.py` (1457 lines). Communicates exclusively via **WebSocket** `ws://127.0.0.1:8000/ws/stream`. REST only for `/api/save-project` and `/api/load-project`.
-- **Website** (separate app): `website/` — Vite + React + TypeScript + Tailwind CSS. Deployed to Cloudflare Pages via wrangler.
+- **Website** (separate app): `website/` — Vite + React + TypeScript + Tailwind CSS. Deployed to Cloudflare Pages (auto-deploy from `main` via `.github/workflows/deploy-website.yml`).
 - **`src-tauri/`** is legacy (gitignored). Do not touch.
 
 ## Commands

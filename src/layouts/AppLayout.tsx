@@ -91,13 +91,21 @@ const AppLayout: React.FC = () => {
     if (isBackendReady) return;
 
     let progress = 0;
+    let retries = 0;
+    const MAX_RETRIES = 30;
+
     const progressInterval = setInterval(() => {
-      progress += Math.floor(Math.random() * 5) + 2; // fake progress
+      progress += Math.floor(Math.random() * 5) + 2;
       if (progress > 95) progress = 95;
       setLoadingProgress(progress);
     }, 200);
 
     const checkBackend = async () => {
+      if (retries++ >= MAX_RETRIES) {
+        setLoadingProgress(100);
+        setTimeout(() => setIsBackendReady(true), 600);
+        return;
+      }
       try {
         const status = await window.electron.getBackendStatus();
         if (status.running) {
