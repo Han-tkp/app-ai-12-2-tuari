@@ -14,7 +14,8 @@
     "build": "npm run build:backend && electron-vite build && electron-builder --win",
     "preview": "electron-vite preview",
     "build:win": "electron-vite build && electron-builder --win",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:linux:docker": "docker run --rm -v \"${PWD}:/project\" -w /project electronuserland/builder:20 npx electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",
