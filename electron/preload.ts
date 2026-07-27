@@ -28,6 +28,9 @@ const electronAPI = {
     return () => ipcRenderer.removeListener('file-drop', listener)
   },
   
+  // Workspace project scanner
+  scanWorkspaceProjects: () => ipcRenderer.invoke('scan-workspace-projects'),
+
   // File Path utility
   getFilePath: (file: File) => {
     try {

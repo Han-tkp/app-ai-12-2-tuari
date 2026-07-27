@@ -14,6 +14,7 @@ export interface ElectronAPI {
 
   // File Operations
   readFileAsBase64: (filePath: string) => Promise<string>;
+  scanWorkspaceProjects: () => Promise<WorkspaceProjectEntry[]>;
 
   // Window Controls
   closeWindow: () => void;
@@ -29,5 +30,13 @@ export interface ElectronAPI {
 declare global {
   interface Window {
     electron: ElectronAPI;
+  }
+
+  interface WorkspaceProjectEntry {
+    name: string;
+    path: string;
+    lastModified: number;
+    slideCount?: number;
+    type: 'project' | 'autosave';
   }
 }

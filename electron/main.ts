@@ -12,6 +12,19 @@ let mainWindow: BrowserWindow | null = null
 let pythonProcess: ChildProcess | null = null
 let isShuttingDown = false
 
+// Enforce single instance — prevents port 8000 conflicts
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
+
 // ── Python AI Backend Manager ─────────────────────────────────────────────
 
 let restartAttempts = 0
@@ -495,7 +508,59 @@ function setupIpcHandlers(): void {
     return fileBuf.toString('base64')
   })
 
-  // 9. Backend Health Check
+  // 9. Scan Workspace for saved projects & autosaves
+  ipcMain.handle('scan-workspace-projects', async () => {
+    try {
+      const workspace = getWorkspacePath()
+      const projectsDir = join(workspace, 'Projects')
+      const autoSaveDir = join(workspace, 'AutoSave')
+      const results: Array<{ name: string; path: string; lastModified: number; slideCount?: number; type: 'project' | 'autosave' }> = []
+
+      // Scan Projects/
+      if (fs.existsSync(projectsDir)) {
+        const entries = fs.readdirSync(projectsDir)
+        for (const entry of entries) {
+          if (entry.endsWith('.drop')) {
+            const fullPath = join(projectsDir, entry)
+            const stat = fs.statSync(fullPath)
+            const name = entry.replace(/\.drop$/, '')
+            // Try to peek inside for slide count
+            let slideCount: number | undefined
+            try {
+              const buf = fs.readFileSync(fullPath)
+              const data = extractJsonFromZip(buf)
+              if (data && data.slides) slideCount = data.slides.length
+            } catch { /* skip slide count */ }
+            results.push({ name, path: fullPath, lastModified: stat.mtimeMs, slideCount, type: 'project' })
+          }
+        }
+      }
+
+      // Scan AutoSave/ — show only the latest autosave per project
+      if (fs.existsSync(autoSaveDir)) {
+        const projectDirs = fs.readdirSync(autoSaveDir, { withFileTypes: true })
+        for (const dir of projectDirs) {
+          if (!dir.isDirectory()) continue
+          const dirPath = join(autoSaveDir, dir.name)
+          const dropFiles = fs.readdirSync(dirPath).filter(f => f.endsWith('.drop'))
+          if (dropFiles.length === 0) continue
+          // Pick the most recent autosave
+          const latest = dropFiles
+            .map(f => ({ name: f, path: join(dirPath, f), mtime: fs.statSync(join(dirPath, f)).mtimeMs }))
+            .sort((a, b) => b.mtime - a.mtime)[0]
+          results.push({ name: `${dir.name} (autosave)`, path: latest.path, lastModified: latest.mtime, type: 'autosave' })
+        }
+      }
+
+      // Sort by last modified descending
+      results.sort((a, b) => b.lastModified - a.lastModified)
+      return results
+    } catch (error: any) {
+      return []
+    }
+  })
+
+  // 10. Backend Health Check
   ipcMain.handle('get-backend-status', async () => {
     try {
       const response = await fetch('http://127.0.0.1:8000/api/ping', {
@@ -510,7 +575,7 @@ function setupIpcHandlers(): void {
     return { running: false, url: 'http://127.0.0.1:8000' }
   })
 
-  // 10. Window Controls (Support both send/on and invoke/handle)
+  // 11. Window Controls (Support both send/on and invoke/handle)
   const closeWin = () => mainWindow?.close()
   const minWin = () => mainWindow?.minimize()
   const toggleMaxWin = () => {

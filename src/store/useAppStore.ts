@@ -450,6 +450,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         mode: 'Report',
         lastAutoSave: Date.now(),
       });
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'Auto-saved session restored', type: 'info' }
+      }));
     } catch (error) {
       console.error('[Auto-Save Recovery] Error:', error);
     }
@@ -746,8 +749,14 @@ export const useAppStore = create<AppState>((set, get) => ({
           method: 'POST'
         }).catch(() => {});
 
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: `Project saved: ${result.drop_file}`, type: 'success' }
+        }));
         console.log(`[Save] Project saved: ${result.drop_file}`);
       } else {
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: 'Failed to save project', type: 'error' }
+        }));
         console.error('[Save] Failed to save project');
       }
     } catch (error) {

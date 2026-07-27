@@ -33,6 +33,24 @@ const AppLayout: React.FC = () => {
 
   // Modal states for file operations
   const [modalType, setModalType] = useState<'new' | 'save-as' | null>(null);
+
+  // Global toast notification
+  const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { message, type } = (e as CustomEvent).detail;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setGlobalToast({ message, type: type || 'info' });
+      toastTimerRef.current = setTimeout(() => setGlobalToast(null), 4000);
+    };
+    window.addEventListener('app-toast', handler);
+    return () => {
+      window.removeEventListener('app-toast', handler);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
   const [modalInput, setModalInput] = useState('');
   const modalInputRef = useRef<HTMLInputElement>(null);
 
@@ -230,7 +248,13 @@ const AppLayout: React.FC = () => {
             slideCount: data.slides?.length,
           });
           setShowStartScreen(false);
+          window.dispatchEvent(new CustomEvent('app-toast', {
+            detail: { message: `Project loaded: ${data.project_name}`, type: 'success' }
+          }));
         } else {
+          window.dispatchEvent(new CustomEvent('app-toast', {
+            detail: { message: 'Failed to load project file', type: 'error' }
+          }));
           console.error('Failed to load project file');
         }
       }
@@ -604,6 +628,32 @@ const AppLayout: React.FC = () => {
               <Workspace />
             </div>
           </main>
+        </div>
+      )}
+
+      {/* ── Global Toast ──────────────────────────────────────────────────── */}
+      {globalToast && (
+        <div
+          className="fixed bottom-20 right-4 z-[9999] px-4 py-3 rounded-lg border pointer-events-auto animate-in slide-in-from-bottom-2 duration-200 max-w-sm"
+          style={{
+            background: 'var(--bg-surface)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            borderColor: globalToast.type === 'error' ? 'var(--mac-red)' :
+                         globalToast.type === 'success' ? 'var(--mac-green)' :
+                         'var(--accent)',
+          }}
+          onClick={() => setGlobalToast(null)}
+        >
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${
+              globalToast.type === 'error' ? 'bg-[var(--mac-red)]' :
+              globalToast.type === 'success' ? 'bg-[var(--mac-green)]' :
+              'bg-[var(--accent)]'
+            }`} />
+            <span className="text-[12px] font-medium" style={{ color: 'var(--text1)' }}>
+              {globalToast.message}
+            </span>
+          </div>
         </div>
       )}
     </div>

@@ -147,13 +147,44 @@ interface StartScreenProps {
 const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSettings }) => {
   const { newProject, loadProjectData, setObjectiveLens, setImportedMediaPath } = useAppStore();
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+  const [workspaceProjects, setWorkspaceProjects] = useState<WorkspaceProjectEntry[]>([]);
   const [dialogType, setDialogType] = useState<'camera' | 'media' | null>(null);
   const { t } = useTranslation();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    setRecentProjects(getRecentProjects());
+    const load = async () => {
+      const recent = getRecentProjects();
+      setRecentProjects(recent);
+
+      // Scan workspace for ALL saved projects & autosaves
+      if (window.electron?.scanWorkspaceProjects) {
+        try {
+          const scanned = await window.electron.scanWorkspaceProjects();
+          setWorkspaceProjects(scanned);
+        } catch { /* ignore */ }
+      }
+    };
+    load();
   }, []);
+
+  // Merge workspace projects into recent list for display
+  const allProjects = (() => {
+    const recentPaths = new Set(recentProjects.map(r => r.path));
+    const unique: RecentProject[] = [...recentProjects];
+    for (const wp of workspaceProjects) {
+      if (!recentPaths.has(wp.path)) {
+        unique.push({
+          name: wp.name,
+          path: wp.path,
+          lastOpened: wp.lastModified,
+          slideCount: wp.slideCount,
+        });
+      }
+    }
+    unique.sort((a, b) => b.lastOpened - a.lastOpened);
+    return unique;
+  })();
 
   const handleCreateProject = async (name: string, lens: '4x' | '10x', type: 'camera' | 'media') => {
     setDialogType(null);
@@ -200,6 +231,9 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
           });
           setRecentProjects(getRecentProjects());
           onEnterWorkspace();
+          window.dispatchEvent(new CustomEvent('app-toast', {
+            detail: { message: `Project loaded: ${data.project_name || 'Unknown'}`, type: 'success' }
+          }));
         } else {
           setErrorMsg('Failed to load project file. Check that the backend is running.');
         }
@@ -218,10 +252,16 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
         loadProjectData(data);
         addRecentProject({ ...project, lastOpened: Date.now() });
         onEnterWorkspace();
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: `Project loaded: ${data.project_name || project.name}`, type: 'success' }
+        }));
       } else {
         // File might be deleted — remove from recent
         removeRecentProject(project.path);
         setRecentProjects(getRecentProjects());
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: 'Project file not found — removed from list', type: 'info' }
+        }));
       }
     } catch (err) {
       console.error('Open recent error:', err);
@@ -392,24 +432,24 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
           </div>
         </div>
 
-        {/* ── Recent Projects ──────────────────────────────────────────────── */}
+        {/* ── Saved Projects ──────────────────────────────────────────────── */}
         <div>
           <h2 className="text-[12px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text4)' }}>
-            Recent Projects
+            Saved Projects
           </h2>
 
-          {recentProjects.length === 0 ? (
+          {allProjects.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-12 rounded-xl border border-dashed"
               style={{ borderColor: 'var(--border)', color: 'var(--text4)' }}
             >
               <Clock size={32} className="mb-3 opacity-50" />
-              <p className="text-[13px] font-medium">No recent projects</p>
+              <p className="text-[13px] font-medium">No saved projects</p>
               <p className="text-[11px] mt-1">Create a new project to get started</p>
             </div>
           ) : (
             <div className="space-y-1.5">
-              {recentProjects.map((project) => (
+              {allProjects.map((project) => (
                 <div
                   key={project.path}
                   role="button"
@@ -426,8 +466,15 @@ const StartScreen: React.FC<StartScreenProps> = ({ onEnterWorkspace, onOpenSetti
                     <FileText size={18} style={{ color: 'var(--accent-text)' }} />
                   </div>
                   <div className="flex-1 text-left min-w-0">
-                    <div className="text-[13px] font-semibold truncate" style={{ color: 'var(--text1)' }}>
-                      {project.name}
+                    <div className="flex items-center gap-2">
+                      <div className="text-[13px] font-semibold truncate" style={{ color: 'var(--text1)' }}>
+                        {project.name}
+                      </div>
+                      {project.path.includes('(autosave)') && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ background: 'var(--accent)', color: '#fff' }}>
+                          Auto
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] truncate" style={{ color: 'var(--text4)' }}>
                       {project.path}

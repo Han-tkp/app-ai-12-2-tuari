@@ -371,26 +371,10 @@ const Workspace: React.FC = () => {
     setImportProgress(`Importing ${type}...`);
 
     try {
-      // For images, read and display locally immediately
-      if (type === 'image') {
-        const base64 = await window.electron.readFileAsBase64(path);
-        const ext = path.split('.').pop()?.toLowerCase();
-        const mimeType = ext === 'png' ? 'image/png' :
-                         ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
-                         ext === 'bmp' ? 'image/bmp' :
-                         ext === 'tiff' || ext === 'tif' ? 'image/tiff' : 'image/jpeg';
-        setImageSrc(`data:${mimeType};base64,${base64}`);
-        setImportedMediaPath(path);
-      }
+      // Set path immediately so Workspace shows "Imported" badge
+      setImportedMediaPath(path);
 
-      // For images: display is already done locally, clear spinner now
-      // Backend will still process for AI, but user sees image immediately
-      if (type === 'image') {
-        setIsImportingMedia(false);
-        setImportProgress('');
-      }
-
-      // Send to backend for AI processing (and video frame extraction)
+      // Send to backend for AI processing, frame extraction & image encoding
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
         ws.current.send(JSON.stringify({
           action: 'import_media',
@@ -399,16 +383,28 @@ const Workspace: React.FC = () => {
           display: type === 'image',
         }));
       } else {
-        if (type === 'video') {
-          showToast('Backend not connected — video requires backend for frame extraction', 'error');
+        // Backend not connected — try reading via IPC for at least local display
+        if (type === 'image') {
+          try {
+            const base64 = await window.electron.readFileAsBase64(path);
+            const ext = path.split('.').pop()?.toLowerCase();
+            const mimeType = ext === 'png' ? 'image/png' :
+                             ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+                             ext === 'bmp' ? 'image/bmp' :
+                             ext === 'tiff' || ext === 'tif' ? 'image/tiff' : 'image/jpeg';
+            setImageSrc(`data:${mimeType};base64,${base64}`);
+            showToast('Image displayed — connect backend for AI features', 'info');
+          } catch (ipcErr) {
+            showToast('Backend not connected — cannot import (IPC blocked for files outside workspace)', 'error');
+          }
         } else {
-          showToast('Image displayed — connect backend for AI features', 'info');
+          showToast('Backend not connected — video requires backend for frame extraction', 'error');
         }
         setIsImportingMedia(false);
         setImportProgress('');
       }
     } catch (err) {
-      console.error('[Import] Failed to read file:', err);
+      console.error('[Import] Failed:', err);
       showToast(`Import failed: ${(err as Error).message}`, 'error');
       setIsImportingMedia(false);
       setImportProgress('');
