@@ -1,132 +1,215 @@
 import React, { useEffect, useState } from 'react';
 
-const SLIDE_IMAGES = Array.from({ length: 7 }, (_, i) => `./appdrpai/${i + 1}.png`);
+// ── Decorative shape components ──────────────────────────────────────────
+const DecoTriangle = ({ style }: { style?: React.CSSProperties }) => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={style}>
+    <path d="M16 4L28 26H4L16 4Z" fill="currentColor" opacity="0.15" />
+    <path d="M16 8L24 24H8L16 8Z" fill="currentColor" opacity="0.1" />
+  </svg>
+);
 
+const DecoCube = ({ style }: { style?: React.CSSProperties }) => (
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style={style}>
+    <rect x="2" y="10" width="16" height="16" rx="2" fill="currentColor" opacity="0.08" />
+    <rect x="6" y="6" width="16" height="16" rx="2" fill="currentColor" opacity="0.12" />
+    <rect x="10" y="2" width="16" height="16" rx="2" fill="currentColor" opacity="0.08" />
+  </svg>
+);
+
+const DecoCircles = ({ style }: { style?: React.CSSProperties }) => (
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style={style}>
+    <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="0.5" opacity="0.08" />
+    <circle cx="20" cy="20" r="12" stroke="currentColor" strokeWidth="0.5" opacity="0.12" />
+    <circle cx="20" cy="20" r="6" fill="currentColor" opacity="0.1" />
+  </svg>
+);
+
+// ── Steps ────────────────────────────────────────────────────────────────
+const STEPS = [
+  { label: 'Initializing' },
+  { label: 'Models' },
+  { label: 'Server' },
+  { label: 'Calibrate' },
+  { label: 'Ready' },
+];
+
+// ── Component ────────────────────────────────────────────────────────────
 interface LoadingScreenProps {
   progress: number;
   message: string;
 }
 
 const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
-  const [currentSlide, setCurrentSlide] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % SLIDE_IMAGES.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
+  const activeStep = Math.min(Math.floor((progress / 100) * STEPS.length), STEPS.length - 1);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0c10] select-none overflow-hidden">
-      {/* Slideshow background */}
-      {SLIDE_IMAGES.map((src, i) => (
-        <img
-          key={src}
-          src={src}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
-          style={{ opacity: i === currentSlide ? 0.5 : 0 }}
-        />
-      ))}
-
-      {/* Gradient overlay — KDE-inspired purple-to-blue */}
-      <div className="absolute inset-0" style={{
-        background: `
-          radial-gradient(ellipse 80% 60% at 50% 40%, rgba(55,30,120,0.4) 0%, transparent 60%),
-          radial-gradient(ellipse 60% 50% at 70% 60%, rgba(30,80,180,0.25) 0%, transparent 50%),
-          radial-gradient(ellipse 50% 40% at 30% 70%, rgba(100,40,160,0.2) 0%, transparent 50%),
-          rgba(10,12,16,0.7)
-        `
-      }} />
-
-      {/* Scan line grain */}
-      <div className="absolute inset-0 opacity-[0.03]"
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center select-none"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+    >
+      {/* Installer Card */}
+      <div
+        className="w-[580px] overflow-hidden shadow-2xl"
         style={{
-          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)`,
-          pointerEvents: 'none'
+          background: 'var(--bg-window)',
+          border: '0.5px solid var(--border)',
+          borderRadius: '12px',
         }}
-      />
-
-      {/* Center content */}
-      <div className="relative z-10 flex flex-col items-center gap-10">
-
-        {/* Brand mark — minimal geometric emblem */}
-        <div className="relative flex items-center justify-center">
-          {/* Outer ring */}
-          <svg width="88" height="88" viewBox="0 0 88 88" fill="none" className="animate-[spin_8s_linear_infinite]">
-            <circle cx="44" cy="44" r="42" stroke="url(#ringGrad)" strokeWidth="1.5" strokeLinecap="round"
-              strokeDasharray="180 84" />
-            <defs>
-              <linearGradient id="ringGrad" x1="0" y1="0" x2="88" y2="88">
-                <stop offset="0%" stopColor="#7c5cbf" />
-                <stop offset="50%" stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#7c5cbf" stopOpacity="0.2" />
-              </linearGradient>
-            </defs>
-          </svg>
-
-          {/* Center dot */}
-          <div className="absolute w-3 h-3 rounded-full bg-white/90 animate-pulse" style={{ animationDuration: '2s' }} />
+      >
+        {/* ══ Title Bar ══ */}
+        <div
+          className="flex items-center justify-between px-[14px] py-[8px]"
+          style={{ borderBottom: '0.5px solid var(--border)', background: 'var(--bg-surface)' }}
+        >
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5" stroke="var(--accent)" strokeWidth="1.5" />
+              <circle cx="7" cy="7" r="1.5" fill="var(--accent)" />
+            </svg>
+            <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 500 }}>
+              DropDetect AI Setup
+            </span>
+          </div>
+          <div className="flex gap-[10px]" style={{ color: 'var(--text4)', fontSize: 14 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ cursor: 'default' }}>
+              <rect x="2" y="6.5" width="10" height="1" rx="0.5" fill="currentColor" />
+            </svg>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ cursor: 'default' }}>
+              <rect x="2" y="2" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
+            </svg>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ cursor: 'default' }}>
+              <line x1="2.5" y1="2.5" x2="11.5" y2="11.5" stroke="currentColor" strokeWidth="1.2" />
+              <line x1="11.5" y1="2.5" x2="2.5" y2="11.5" stroke="currentColor" strokeWidth="1.2" />
+            </svg>
+          </div>
         </div>
 
-        {/* Title */}
-        <div className="flex flex-col items-center gap-1.5">
-          <h1 className="text-[22px] font-light tracking-[0.15em] text-white/90 uppercase">
-            DropDetect <span className="font-semibold text-white">AI</span>
-          </h1>
-          <p className="text-[10px] tracking-[0.3em] text-white/30 uppercase">
-            Precision Droplet Analysis
+        {/* ══ Body ══ */}
+        <div className="relative px-8 py-12 text-center" style={{ background: 'var(--bg-window)' }}>
+          {/* Decorative icons */}
+          <div className="absolute" style={{ top: 16, left: 16, color: 'var(--accent-text)' }}>
+            <DecoTriangle />
+          </div>
+          <div className="absolute" style={{ bottom: 16, right: 16, color: 'var(--text4)' }}>
+            <DecoCube />
+          </div>
+          <div className="absolute" style={{ top: '40%', right: 24, color: 'var(--text4)' }}>
+            <DecoCircles />
+          </div>
+
+          {/* Logo / Brand */}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="1" y="1" width="20" height="20" rx="5" stroke="var(--accent)" strokeWidth="1.5" />
+              <path d="M11 6L15 16H7L11 6Z" fill="var(--accent)" opacity="0.3" />
+              <circle cx="11" cy="11" r="2.5" fill="var(--accent)" />
+            </svg>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text1)', letterSpacing: '0.02em' }}>
+              DropDetect <span style={{ color: 'var(--accent-text)' }}>AI</span>
+            </span>
+          </div>
+
+          <h2
+            className="m-0"
+            style={{ fontSize: 17, fontWeight: 600, color: 'var(--text1)', marginBottom: 10 }}
+          >
+            Preparing your workspace
+          </h2>
+          <p
+            className="m-0"
+            style={{
+              maxWidth: 400,
+              margin: '0 auto',
+              fontSize: 13,
+              color: 'var(--text2)',
+              lineHeight: 1.7,
+            }}
+          >
+            Initializing core systems and loading AI detection models.
+            <br />
+            This may take a few moments on first launch.
           </p>
         </div>
 
-        {/* Glass card with progress */}
-        <div className="w-72 backdrop-blur-xl rounded-2xl border border-white/[0.06] px-7 py-5"
-          style={{ background: 'rgba(255,255,255,0.03)' }}
+        {/* ══ Progress Section ══ */}
+        <div
+          className="px-5 py-3"
+          style={{ borderTop: '0.5px solid var(--border)', background: 'var(--bg-window)' }}
         >
-          {/* Progress bar — KDE-style thin elegant bar */}
-          <div className="relative w-full h-[3px] rounded-full overflow-hidden bg-white/10">
+          <p className="m-0 mb-2" style={{ fontSize: 12, color: 'var(--text3)' }}>
+            {message}
+          </p>
+          <div className="flex items-center gap-[10px]">
             <div
-              className="h-full rounded-full transition-all duration-500 ease-out"
+              className="flex-1"
               style={{
-                width: `${progress}%`,
-                background: 'linear-gradient(90deg, #7c5cbf, #3b82f6, #60a5fa)',
-                boxShadow: '0 0 12px rgba(59,130,246,0.4)'
+                height: 5,
+                background: 'var(--bg-surface)',
+                borderRadius: 4,
+                overflow: 'hidden',
               }}
-            />
-          </div>
-
-          {/* Dots indicator — KDE Plasma style */}
-          <div className="flex justify-center gap-1.5 mt-4">
-            {[20, 40, 60, 80, 100].map((threshold) => (
+            >
               <div
-                key={threshold}
-                className="w-1.5 h-1.5 rounded-full transition-all duration-500"
+                className="h-full transition-all duration-500 ease-out"
                 style={{
-                  background: progress >= threshold ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.15)',
-                  boxShadow: progress >= threshold ? '0 0 6px rgba(59,130,246,0.4)' : 'none'
+                  width: `${progress}%`,
+                  background: 'var(--accent)',
+                  borderRadius: 4,
                 }}
               />
-            ))}
-          </div>
-
-          {/* Status message */}
-          <div className="flex justify-between items-center mt-4">
-            <span className="text-[11px] font-medium tracking-wide text-white/50">
-              {message}
-            </span>
-            <span className="text-[11px] font-semibold text-white/70 tabular-nums">
+            </div>
+            <span
+              className="tabular-nums shrink-0"
+              style={{ fontSize: 12, color: 'var(--text3)', minWidth: 32, textAlign: 'right' }}
+            >
               {progress}%
             </span>
           </div>
         </div>
-      </div>
 
-      {/* Bottom hint */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
-        <p className="text-[9px] tracking-[0.2em] text-white/15 uppercase">
-          Initializing System
-        </p>
+        {/* ══ Footer — Steps + Button ══ */}
+        <div
+          className="flex items-center justify-between px-5 py-2.5"
+          style={{
+            borderTop: '0.5px solid var(--border)',
+            background: 'var(--bg-surface)',
+          }}
+        >
+          {/* Step indicators */}
+          <div className="flex gap-3 flex-wrap" style={{ fontSize: 11 }}>
+            {STEPS.map((step, i) => {
+              const isActive = i === activeStep;
+              const isDone = i < activeStep;
+              return (
+                <span
+                  key={step.label}
+                  className="transition-colors duration-300"
+                  style={{
+                    color: isDone ? 'var(--accent-text)' : isActive ? 'var(--text1)' : 'var(--text4)',
+                    fontWeight: isDone || isActive ? 600 : 400,
+                  }}
+                >
+                  {step.label}
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Start / Waiting button */}
+          <button
+            className="border-none px-4 py-1.5 text-[12px] font-medium transition-opacity"
+            style={{
+              background: 'var(--accent)',
+              color: 'var(--on-accent, #fff)',
+              borderRadius: 6,
+              opacity: progress >= 100 ? 1 : 0.5,
+              cursor: progress >= 100 ? 'pointer' : 'default',
+            }}
+            disabled={progress < 100}
+          >
+            {progress >= 100 ? 'Start' : 'Waiting...'}
+          </button>
+        </div>
       </div>
     </div>
   );
