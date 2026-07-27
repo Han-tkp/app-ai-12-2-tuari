@@ -11,11 +11,10 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build:backend": "cd backend && .\\venv\\Scripts\\python.exe -m PyInstaller build_backend.spec --clean",
-    "build": "npm run build:backend && electron-vite build && electron-builder --win --linux --mac",
+    "build": "npm run build:backend && electron-vite build && electron-builder --win",
     "preview": "electron-vite preview",
     "build:win": "electron-vite build && electron-builder --win",
-    "build:linux": "electron-vite build && electron-builder --linux",
-    "build:mac": "electron-vite build && electron-builder --mac"
+    "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",

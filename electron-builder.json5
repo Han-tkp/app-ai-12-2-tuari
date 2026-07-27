@@ -28,21 +28,6 @@
     ],
     "icon": "iconapp/DropDetect.ico"
   },
-  "mac": {
-    "target": [
-      {
-        "target": "dmg",
-        "arch": [
-          "x64",
-          "arm64"
-        ]
-      },
-      "zip"
-    ],
-    "category": "public.app-category.science",
-    "icon": "iconapp/DropDetect.icns",
-    "hardenedRuntime": true
-  },
   "linux": {
     "target": [
       "AppImage",
