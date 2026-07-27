@@ -13,9 +13,12 @@
     "build:backend": "cd backend && .\\venv\\Scripts\\python.exe -m PyInstaller build_backend.spec --clean",
     "build": "npm run build:backend && electron-vite build && electron-builder --win",
     "preview": "electron-vite preview",
-    "build:win": "electron-vite build && electron-builder --win",
+    "build:exe": "electron-vite build && electron-builder --win",
     "build:linux": "electron-vite build && electron-builder --linux",
-    "build:linux:docker": "docker run --rm -v \"${PWD}:/project\" -w /project electronuserland/builder:20 npx electron-builder --linux"
+    "build:deb:docker": "docker run --rm -v \"%cd%:/project\" -w /project electronuserland/builder:20 npx electron-builder --linux deb",
+    "build:rpm:docker": "docker run --rm -v \"%cd%:/project\" -w /project electronuserland/builder:20 npx electron-builder --linux rpm",
+    "build:appimage:docker": "docker run --rm -v \"%cd%:/project\" -w /project electronuserland/builder:20 npx electron-builder --linux AppImage",
+    "build:linux:docker": "docker run --rm -v \"%cd%:/project\" -w /project electronuserland/builder:20 npx electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",
