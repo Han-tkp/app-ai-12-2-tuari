@@ -60,7 +60,9 @@ function _doStartPythonBackend(): void {
     }
     args = [mainScript]
   } else {
-    const prodExe = join(process.resourcesPath, 'backend', 'dist', 'dropdetect-backend.exe')
+    const backendDir = join(process.resourcesPath, 'backend', 'dist')
+    const exeName = process.platform === 'win32' ? 'dropdetect-backend.exe' : 'dropdetect-backend'
+    const prodExe = join(backendDir, exeName)
 
     if (fs.existsSync(prodExe)) {
       command = prodExe
